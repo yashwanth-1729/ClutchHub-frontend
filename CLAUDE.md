@@ -18,12 +18,12 @@ No test suite is configured.
 | Service | Value |
 |---|---|
 | Backend API (VPS) | `http://66.85.185.109` |
-| Backend API (Cloudflare tunnel, in .env.local) | `NEXT_PUBLIC_API_URL` |
-| WebSocket (STOMP) | `NEXT_PUBLIC_WS_URL` + `/ws-clutchhub` |
+| Backend API (in .env.local) | `http://66.85.185.109:8080/api` |
+| WebSocket (STOMP) | `ws://66.85.185.109:8080/ws` + `/ws-clutchhub` |
 | Supabase project | `ieacinyotzoynqipfqbd.supabase.co` |
 | Vercel deployment | `clutchhub-tau.vercel.app` |
 
-All env vars are `NEXT_PUBLIC_*` (browser-visible). The Cloudflare tunnel URL in `.env.local` is a temporary tunnel and may change — the VPS IP `66.85.185.109` is the stable backend address.
+All env vars are `NEXT_PUBLIC_*` (browser-visible). The VPS at `66.85.185.109:8080` is the stable backend address.
 
 ## Architecture Overview
 
