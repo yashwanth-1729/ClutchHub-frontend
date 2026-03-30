@@ -60,6 +60,14 @@ export const teamApi = {
   get: (tournamentId: string) => api.get(`/tournaments/${tournamentId}/teams`),
 };
 
+// Users / Messaging
+export const userApi = {
+  search: (q: string) => api.get('/users/search', { params: { q } }),
+  conversations: () => api.get('/users/conversations'),
+  getMessages: (userId: string) => api.get(`/users/messages/${userId}`),
+  sendMessage: (userId: string, content: string) => api.post(`/users/messages/${userId}`, { content }),
+};
+
 // Payments
 export const paymentApi = {
   createOrder: (data: unknown) => api.post('/payments/order', data),

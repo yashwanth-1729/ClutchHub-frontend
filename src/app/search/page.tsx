@@ -2,13 +2,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
-import axios from 'axios';
-
-const API = process.env.NEXT_PUBLIC_API_URL;
+import { userApi } from '@/lib/api';
 
 export default function SearchPage() {
   const router = useRouter();
-  const { isAuthenticated, accessToken, user } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
   const [tab, setTab] = useState<'search' | 'chats'>('search');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<any[]>([]);
@@ -41,27 +39,25 @@ export default function SearchPage() {
     loadMessages(selectedUser.id);
     const interval = setInterval(() => loadMessages(selectedUser.id), 5000);
     return () => clearInterval(interval);
-  }, [selectedUser]);
-
-  const headers = { Authorization: `Bearer ${accessToken}` };
+  }, [selectedUser?.id]);
 
   const searchUsers = async () => {
     try {
-      const res = await axios.get(`${API}/users/search?q=${query}`, { headers });
+      const res = await userApi.search(query);
       setResults(res.data?.data || []);
     } catch {}
   };
 
   const loadConversations = async () => {
     try {
-      const res = await axios.get(`${API}/users/conversations`, { headers });
+      const res = await userApi.conversations();
       setConversations(res.data?.data || []);
     } catch {}
   };
 
   const loadMessages = async (userId: string) => {
     try {
-      const res = await axios.get(`${API}/users/messages/${userId}`, { headers });
+      const res = await userApi.getMessages(userId);
       setMessages(res.data?.data || []);
     } catch {}
   };
@@ -70,7 +66,7 @@ export default function SearchPage() {
     if (!newMsg.trim() || !selectedUser) return;
     setSending(true);
     try {
-      await axios.post(`${API}/users/messages/${selectedUser.id}`, { content: newMsg }, { headers });
+      await userApi.sendMessage(selectedUser.id, newMsg);
       setNewMsg('');
       await loadMessages(selectedUser.id);
       await loadConversations();

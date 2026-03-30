@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s -o /dev/null -w \"%{http_code} %{time_total}s\" --connect-timeout 8 http://66.85.185.109:8080/api/actuator/health)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code} %{time_total}s\" --connect-timeout 8 http://66.85.185.109:8080/api/tournaments)",
+      "Bash(npm run:*)",
+      "Bash(export PATH=\"$PATH:/c/Program Files/nodejs\")"
+    ]
+  }
+}
