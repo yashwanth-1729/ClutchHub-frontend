@@ -1,0 +1,13 @@
+{
+  "/_not-found/page": "app/_not-found/page.js",
+  "/auth/complete-profile/page": "app/auth/complete-profile/page.js",
+  "/page": "app/page.js",
+  "/my-teams/page": "app/my-teams/page.js",
+  "/auth/callback/page": "app/auth/callback/page.js",
+  "/tournaments/create/page": "app/tournaments/create/page.js",
+  "/search/page": "app/search/page.js",
+  "/tournaments/[slug]/page": "app/tournaments/[slug]/page.js",
+  "/profile/page": "app/profile/page.js",
+  "/tournaments/page": "app/tournaments/page.js",
+  "/auth/page": "app/auth/page.js"
+}
