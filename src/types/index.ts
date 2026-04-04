@@ -1,4 +1,4 @@
-export type UserRole = 'PLAYER' | 'ORGANIZER' | 'ORG_HOST' | 'ADMIN';
+export type UserRole = 'PLAYER' | 'ORGANIZER' | 'ORG_HOST' | 'ADMIN' | 'SUPER_ADMIN';
 export type TournamentStatus = 'DRAFT' | 'OPEN' | 'FULL' | 'ONGOING' | 'COMPLETED' | 'CANCELLED';
 export type TeamFormat = 'SOLO' | 'DUO' | 'SQUAD';
 export type PaymentStatus = 'PENDING' | 'SUCCESS' | 'FAILED';
@@ -40,6 +40,8 @@ export interface Tournament {
   bannerUrl?: string;
   organizerName?: string;
   rules?: string;
+  roomId?: string;
+  roomPassword?: string;
 }
 
 export interface Team {

@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
-import { Plus, Search } from 'lucide-react';
+import { Plus, Search, Trophy } from 'lucide-react';
 import axios from 'axios';
 
 const API = process.env.NEXT_PUBLIC_API_URL;
