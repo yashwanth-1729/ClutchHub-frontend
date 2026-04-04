@@ -5,74 +5,42 @@ import { useAuthStore } from '@/store/authStore';
 import { supabase } from '@/lib/supabase';
 import axios from 'axios';
 import { userApi } from '@/lib/api';
+import { Edit2, LogOut, User, Gamepad2, Trophy, Download, Check, X } from 'lucide-react';
 
 const API = process.env.NEXT_PUBLIC_API_URL;
-
 const GAME_ROLES = ['SNIPER', 'RUSHER', 'NADER', 'ASSAULTER', 'SECONDARY RUSHER', 'SUPPORT'];
-const GENDERS = ['MALE', 'FEMALE', 'OTHER'];
+const GENDERS    = ['MALE', 'FEMALE', 'OTHER'];
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { user, isAuthenticated, logout, setAuth, accessToken } = useAuthStore();
-  const [mounted, setMounted] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [profile, setProfile] = useState<any>(null);
+  const { user, isAuthenticated, logout, accessToken } = useAuthStore();
+  const [editing,      setEditing]      = useState(false);
+  const [saving,       setSaving]       = useState(false);
+  const [msg,          setMsg]          = useState('');
+  const [profile,      setProfile]      = useState<any>(null);
   const [achievements, setAchievements] = useState<any[]>([]);
-  const [form, setForm] = useState({
-    username: '', gameUid: '', gender: '', gameRole: '', bio: '',
-  });
+  const [form, setForm] = useState({ username: '', gameUid: '', gender: '', gameRole: '', bio: '' });
 
   useEffect(() => {
-    setMounted(true);
     if (!isAuthenticated) { router.push('/auth'); return; }
-    loadProfile();
-    loadAchievements();
+    const headers = { Authorization: `Bearer ${accessToken}` };
+    axios.get(`${API}/profile`, { headers }).then(r => {
+      const p = r.data?.data;
+      setProfile(p);
+      setForm({ username: p?.username || '', gameUid: p?.gameUid || '', gender: p?.gender || '', gameRole: p?.gameRole || '', bio: p?.bio || '' });
+    }).catch(() => {});
+    userApi.achievements().then(r => setAchievements(r.data?.data || [])).catch(() => {});
   }, [isAuthenticated]);
 
-  const loadAchievements = async () => {
-    try {
-      const res = await userApi.achievements();
-      setAchievements(res.data?.data || []);
-    } catch {}
-  };
-
-  const loadProfile = async () => {
-    try {
-      const res = await axios.get(`${API}/profile`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      const data = res.data?.data;
-      setProfile(data);
-      setForm({
-        username: data.username || '',
-        gameUid: data.gameUid || '',
-        gender: data.gender || '',
-        gameRole: data.gameRole || '',
-        bio: data.bio || '',
-      });
-    } catch {}
-  };
-
   const handleSave = async () => {
-    setSaving(true);
-    setError('');
-    setSuccess('');
+    setSaving(true); setMsg('');
     try {
-      const res = await axios.put(`${API}/profile`, form, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      if (res.data?.data) {
-        setProfile(res.data.data);
-        setSuccess('Profile updated!');
-        setEditing(false);
-      }
-    } catch (e: any) {
-      setError(e.response?.data?.message || 'Failed to update');
-    }
-    setSaving(false);
+      await axios.put(`${API}/profile`, form, { headers: { Authorization: `Bearer ${accessToken}` } });
+      setMsg('Profile saved!');
+      setEditing(false);
+      setProfile((p: any) => ({ ...p, ...form }));
+    } catch { setMsg('Failed to save.'); }
+    finally { setSaving(false); }
   };
 
   const handleLogout = async () => {
@@ -81,254 +49,143 @@ export default function ProfilePage() {
     router.push('/auth');
   };
 
-  const update = (key: string, value: string) => setForm(f => ({ ...f, [key]: value }));
-
-  if (!user) return null;
-
-  const roleColors: Record<string, string> = {
-    SNIPER: 'var(--cyan)', RUSHER: 'var(--red)', NADER: 'var(--magenta)',
-    ASSAULTER: 'var(--orange)', 'SECONDARY RUSHER': 'var(--gold)', SUPPORT: 'var(--green)',
-  };
+  if (!isAuthenticated) return null;
+  const displayName = profile?.displayName || profile?.username || user?.displayName || 'Player';
+  const initials    = displayName.slice(0, 2).toUpperCase();
 
   return (
-    <div style={{ minHeight: '100vh', paddingBottom: '100px', animation: mounted ? 'pageEnter 0.4s ease forwards' : 'none' }}>
-      {/* Header */}
-      <div style={{ background: 'rgba(3,3,8,0.95)', backdropFilter: 'blur(20px)', borderBottom: '1px solid var(--border)', padding: '1rem', position: 'sticky', top: 0, zIndex: 40 }}>
-        <div style={{ maxWidth: 'var(--content-max)', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', fontWeight: 900, color: 'var(--orange)', letterSpacing: '0.1em', textShadow: '0 0 15px var(--orange-glow)' }}>PROFILE</h1>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.6rem', color: 'var(--text-dim)', letterSpacing: '0.2em' }}>YOUR ACCOUNT</div>
+    <div className="page-wrapper">
+      {/* Profile card */}
+      <div className="card" style={{ padding: '1.75rem', marginBottom: '1.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1.25rem', flexWrap: 'wrap' }}>
+          {/* Avatar */}
+          <div style={{ width: 72, height: 72, borderRadius: '50%', background: 'var(--red-dim)', border: '2px solid var(--red)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '1.4rem', fontWeight: 700, color: 'var(--red)' }}>
+            {profile?.avatarUrl ? <img src={profile.avatarUrl} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} alt="" /> : initials}
           </div>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            {!editing && (
-              <button onClick={() => setEditing(true)} style={{
-                background: 'rgba(0,245,255,0.1)', border: '1px solid var(--cyan)',
-                color: 'var(--cyan)', padding: '0.4rem 0.8rem',
-                fontFamily: 'var(--font-mono)', fontSize: '0.65rem', cursor: 'pointer',
-                borderRadius: '4px', letterSpacing: '0.1em',
-              }}>EDIT</button>
-            )}
-            <button onClick={handleLogout} style={{
-              background: 'rgba(255,34,68,0.1)', border: '1px solid var(--red)',
-              color: 'var(--red)', padding: '0.4rem 0.8rem',
-              fontFamily: 'var(--font-mono)', fontSize: '0.65rem', cursor: 'pointer',
-              borderRadius: '4px', letterSpacing: '0.1em',
-            }}>OUT</button>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <h1 style={{ fontSize: '1.25rem', fontWeight: 700, letterSpacing: '-0.01em' }}>{displayName}</h1>
+              <span className="badge badge-gray" style={{ textTransform: 'uppercase', fontSize: '0.65rem' }}>{user?.role || 'PLAYER'}</span>
+            </div>
+            {profile?.username && <div style={{ fontSize: '0.825rem', color: 'var(--text-2)', marginTop: '2px' }}>@{profile.username}</div>}
+            {profile?.gameUid  && <div style={{ fontSize: '0.8rem', color: 'var(--text-3)', fontFamily: 'var(--font-mono)', marginTop: '4px' }}>UID: {profile.gameUid}</div>}
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
+            <button className="btn btn-ghost btn-sm" onClick={() => setEditing(!editing)}>
+              {editing ? <><X size={15} /> Cancel</> : <><Edit2 size={15} /> Edit</>}
+            </button>
+            <button className="btn btn-ghost btn-sm" onClick={handleLogout} style={{ color: 'var(--red)' }}>
+              <LogOut size={15} />
+            </button>
           </div>
         </div>
-      </div>
 
-      <div style={{ maxWidth: 'var(--content-max)', margin: '0 auto', padding: '1.5rem 1rem' }}>
-        {/* Avatar */}
-        <div style={{
-          background: 'var(--surface)', border: '1px solid var(--border)',
-          borderRadius: '12px', padding: '2rem 1.5rem', marginBottom: '1rem',
-          textAlign: 'center', position: 'relative', overflow: 'hidden',
-        }}>
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px', background: 'linear-gradient(90deg, transparent, var(--orange), var(--cyan), var(--orange), transparent)', backgroundSize: '200% 100%', animation: 'navLine 3s linear infinite' }} />
-          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at 50% 0%, rgba(255,107,43,0.06) 0%, transparent 60%)', animation: 'bgShift 6s ease-in-out infinite alternate' }} />
-
-          <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--orange), var(--gold))', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem', fontSize: '2rem', fontWeight: 700, boxShadow: '0 0 30px var(--orange-glow)', position: 'relative', zIndex: 1 }}>
-            {(profile?.displayName || user.displayName)?.[0]?.toUpperCase() || '?'}
-          </div>
-
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', fontWeight: 900, color: 'var(--text)', letterSpacing: '0.05em', position: 'relative', zIndex: 1, marginBottom: '0.5rem' }}>
-            {profile?.displayName || user.displayName || 'AGENT'}
-          </h2>
-
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', flexWrap: 'wrap', position: 'relative', zIndex: 1 }}>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', background: 'rgba(255,107,43,0.15)', border: '1px solid var(--orange)', color: 'var(--orange)', padding: '0.2rem 0.6rem', borderRadius: '2px' }}>
-              {profile?.role || user.role || 'PLAYER'}
-            </span>
-            {profile?.gameRole && (
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', background: `${roleColors[profile.gameRole] || 'var(--cyan)'}22`, border: `1px solid ${roleColors[profile.gameRole] || 'var(--cyan)'}`, color: roleColors[profile.gameRole] || 'var(--cyan)', padding: '0.2rem 0.6rem', borderRadius: '2px' }}>
-                {profile.gameRole}
-              </span>
-            )}
-            {profile?.gender && (
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', background: 'rgba(136,136,170,0.1)', border: '1px solid var(--border2)', color: 'var(--text-dim)', padding: '0.2rem 0.6rem', borderRadius: '2px' }}>
-                {profile.gender}
-              </span>
-            )}
-          </div>
-
-          {profile?.bio && (
-            <p style={{ marginTop: '0.75rem', color: 'var(--text-dim)', fontSize: '0.9rem', lineHeight: 1.5, position: 'relative', zIndex: 1 }}>{profile.bio}</p>
-          )}
-        </div>
-
-        {/* Edit form or Info display */}
-        {editing ? (
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--cyan)', borderRadius: '8px', padding: '1.5rem', marginBottom: '1rem', position: 'relative', overflow: 'hidden' }}>
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '1px', background: 'linear-gradient(90deg, transparent, var(--cyan), transparent)' }} />
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--cyan)', letterSpacing: '0.2em', marginBottom: '1.25rem' }}>// EDIT PROFILE</div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        {/* Edit form */}
+        {editing && (
+          <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.875rem', marginBottom: '0.875rem' }}>
               {[
-                { label: 'USERNAME', key: 'username', type: 'text', placeholder: 'Your username' },
-                { label: 'FREE FIRE UID', key: 'gameUid', type: 'text', placeholder: 'Your game UID' },
-                { label: 'BIO', key: 'bio', type: 'text', placeholder: 'Short bio...' },
-              ].map(field => (
-                <div key={field.key}>
-                  <label style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--cyan)', letterSpacing: '0.15em', display: 'block', marginBottom: '0.35rem' }}>{field.label}</label>
-                  <input
-                    type={field.type}
-                    value={form[field.key as keyof typeof form]}
-                    onChange={e => update(field.key, e.target.value)}
-                    placeholder={field.placeholder}
-                    style={{
-                      width: '100%', background: 'rgba(0,0,0,0.5)',
-                      border: '1px solid var(--border2)', borderBottom: '1px solid var(--orange)',
-                      color: 'var(--text)', padding: '0.7rem 0.875rem',
-                      fontFamily: 'var(--font-body)', fontSize: '0.95rem',
-                      outline: 'none', borderRadius: '4px 4px 0 0',
-                    }}
-                  />
+                { label: 'Username',  key: 'username',  placeholder: 'your_username' },
+                { label: 'Free Fire UID', key: 'gameUid', placeholder: '123456789' },
+              ].map(f => (
+                <div key={f.key}>
+                  <label className="input-label">{f.label}</label>
+                  <input className="input" placeholder={f.placeholder} value={(form as any)[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))} />
                 </div>
               ))}
-
-              {/* Gender selector */}
               <div>
-                <label style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--cyan)', letterSpacing: '0.15em', display: 'block', marginBottom: '0.35rem' }}>GENDER</label>
-                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                  {GENDERS.map(g => (
-                    <button key={g} onClick={() => update('gender', g)} style={{
-                      padding: '0.4rem 0.9rem', border: `1px solid ${form.gender === g ? 'var(--orange)' : 'var(--border2)'}`,
-                      background: form.gender === g ? 'rgba(255,107,43,0.15)' : 'transparent',
-                      color: form.gender === g ? 'var(--orange)' : 'var(--text-dim)',
-                      fontFamily: 'var(--font-mono)', fontSize: '0.65rem', cursor: 'pointer',
-                      borderRadius: '4px', letterSpacing: '0.1em', transition: 'all 0.2s',
-                    }}>{g}</button>
-                  ))}
-                </div>
+                <label className="input-label">Gender</label>
+                <select className="input" value={form.gender} onChange={e => setForm(p => ({ ...p, gender: e.target.value }))}>
+                  <option value="">Select</option>
+                  {GENDERS.map(g => <option key={g} value={g}>{g}</option>)}
+                </select>
               </div>
-
-              {/* Game role selector */}
               <div>
-                <label style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--cyan)', letterSpacing: '0.15em', display: 'block', marginBottom: '0.35rem' }}>GAME ROLE</label>
-                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                  {GAME_ROLES.map(r => (
-                    <button key={r} onClick={() => update('gameRole', r)} style={{
-                      padding: '0.4rem 0.75rem',
-                      border: `1px solid ${form.gameRole === r ? (roleColors[r] || 'var(--orange)') : 'var(--border2)'}`,
-                      background: form.gameRole === r ? `${roleColors[r] || 'var(--orange)'}22` : 'transparent',
-                      color: form.gameRole === r ? (roleColors[r] || 'var(--orange)') : 'var(--text-dim)',
-                      fontFamily: 'var(--font-mono)', fontSize: '0.6rem', cursor: 'pointer',
-                      borderRadius: '4px', letterSpacing: '0.05em', transition: 'all 0.2s',
-                    }}>{r}</button>
-                  ))}
-                </div>
+                <label className="input-label">Game Role</label>
+                <select className="input" value={form.gameRole} onChange={e => setForm(p => ({ ...p, gameRole: e.target.value }))}>
+                  <option value="">Select</option>
+                  {GAME_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
               </div>
             </div>
-
-            {error && <div style={{ marginTop: '1rem', padding: '0.6rem', background: 'rgba(255,34,68,0.1)', border: '1px solid var(--red)', borderRadius: '4px', color: 'var(--red)', fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>⚠ {error}</div>}
-            {success && <div style={{ marginTop: '1rem', padding: '0.6rem', background: 'rgba(0,255,136,0.1)', border: '1px solid var(--green)', borderRadius: '4px', color: 'var(--green)', fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>✓ {success}</div>}
-
-            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem' }}>
-              <button onClick={() => { setEditing(false); setError(''); }} style={{
-                flex: 1, padding: '0.75rem', background: 'transparent',
-                border: '1px solid var(--border2)', color: 'var(--text-dim)',
-                fontFamily: 'var(--font-display)', fontSize: '0.75rem', fontWeight: 700,
-                letterSpacing: '0.1em', cursor: 'pointer', borderRadius: '4px',
-              }}>CANCEL</button>
-              <button onClick={handleSave} disabled={saving} style={{
-                flex: 2, padding: '0.75rem',
-                background: saving ? 'rgba(255,107,43,0.3)' : 'linear-gradient(135deg, var(--orange), #cc4400)',
-                color: '#fff', border: 'none', cursor: saving ? 'not-allowed' : 'pointer',
-                fontFamily: 'var(--font-display)', fontSize: '0.8rem', fontWeight: 700,
-                letterSpacing: '0.1em', borderRadius: '4px',
-                boxShadow: saving ? 'none' : '0 0 20px var(--orange-glow)',
-              }}>
-                {saving ? 'SAVING...' : '✓ SAVE CHANGES'}
+            <div style={{ marginBottom: '1rem' }}>
+              <label className="input-label">Bio</label>
+              <textarea className="input" placeholder="Tell us about yourself…" value={form.bio} onChange={e => setForm(p => ({ ...p, bio: e.target.value }))} style={{ minHeight: 72 }} />
+            </div>
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button className="btn btn-ghost" onClick={() => setEditing(false)}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+                {saving ? 'Saving…' : <><Check size={15} /> Save Changes</>}
               </button>
             </div>
-          </div>
-        ) : (
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', padding: '1.25rem', marginBottom: '1rem', position: 'relative', overflow: 'hidden' }}>
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '1px', background: 'linear-gradient(90deg, transparent, var(--cyan), transparent)' }} />
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--cyan)', letterSpacing: '0.2em', marginBottom: '1rem' }}>// AGENT DATA</div>
-            {[
-              { label: 'EMAIL', value: profile?.email || user.email || '—' },
-              { label: 'USERNAME', value: profile?.username || '—' },
-              { label: 'GAME UID', value: profile?.gameUid || '—' },
-              { label: 'GENDER', value: profile?.gender || '—' },
-              { label: 'GAME ROLE', value: profile?.gameRole || '—' },
-            ].map((item, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.6rem 0', borderBottom: i < 4 ? '1px solid var(--border)' : 'none' }}>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text-dim)', letterSpacing: '0.1em' }}>{item.label}</span>
-                <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.95rem', color: 'var(--text)', fontWeight: 500 }}>{item.value}</span>
-              </div>
-            ))}
+            {msg && <div style={{ marginTop: '0.75rem', fontSize: '0.825rem', color: msg.includes('saved') ? 'var(--green)' : 'var(--red)' }}>{msg}</div>}
           </div>
         )}
 
-        {/* Achievements section */}
-        {!editing && achievements.length > 0 && (
-          <div style={{ marginBottom: '1rem' }}>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text-dim)', letterSpacing: '0.2em', marginBottom: '0.75rem' }}>// BATTLE HISTORY</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              {achievements.map((a: any, i: number) => {
-                const rankLabel = a.rank === 1 ? '🥇' : a.rank === 2 ? '🥈' : a.rank === 3 ? '🥉' : a.rank ? `#${a.rank}` : '–';
-                const statusColor = a.tournamentStatus === 'ONGOING' || a.tournamentStatus === 'LIVE' ? 'var(--red)' : a.tournamentStatus === 'COMPLETED' ? 'var(--text-dim)' : 'var(--cyan)';
-                return (
-                  <div key={i} style={{ background: 'var(--surface)', border: `1px solid ${a.certificate ? 'rgba(245,200,66,0.3)' : 'var(--border)'}`, borderRadius: '8px', padding: '1rem', position: 'relative', overflow: 'hidden' }}>
-                    {a.certificate && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px', background: 'linear-gradient(90deg, transparent, var(--gold), transparent)' }} />}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontFamily: 'var(--font-display)', fontSize: '0.9rem', fontWeight: 700, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.tournamentName}</div>
-                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.6rem', color: statusColor, letterSpacing: '0.1em', marginTop: '2px' }}>{a.tournamentStatus} · {a.format}</div>
-                      </div>
-                      <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', fontWeight: 900, color: a.rank && a.rank <= 3 ? 'var(--gold)' : 'var(--text-dim)', textShadow: a.rank && a.rank <= 3 ? '0 0 10px var(--gold)' : 'none', marginLeft: '0.75rem', flexShrink: 0 }}>{rankLabel}</div>
-                    </div>
-                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                      <div>
-                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.55rem', color: 'var(--text-dim)', letterSpacing: '0.1em' }}>TEAM</div>
-                        <div style={{ fontFamily: 'var(--font-display)', fontSize: '0.75rem', color: 'var(--text)', fontWeight: 600 }}>{a.teamName}</div>
-                      </div>
-                      <div>
-                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.55rem', color: 'var(--text-dim)', letterSpacing: '0.1em' }}>POINTS</div>
-                        <div style={{ fontFamily: 'var(--font-display)', fontSize: '0.75rem', color: 'var(--orange)', fontWeight: 600 }}>{a.teamPoints || 0}</div>
-                      </div>
-                      {a.certificate && (
-                        <a href={a.certificate.pdfUrl} target="_blank" rel="noopener noreferrer" style={{ marginLeft: 'auto', padding: '0.3rem 0.75rem', background: 'rgba(245,200,66,0.1)', border: '1px solid var(--gold)', color: 'var(--gold)', fontFamily: 'var(--font-mono)', fontSize: '0.6rem', letterSpacing: '0.1em', borderRadius: '4px', textDecoration: 'none', cursor: 'pointer', flexShrink: 0 }}>
-                          ↓ CERT
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Action menu */}
-        {!editing && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text-dim)', letterSpacing: '0.2em', marginBottom: '0.25rem' }}>// ACTIONS</div>
-            {[
-              { icon: '◈', label: 'MY TOURNAMENTS', action: () => router.push('/my-teams'), color: 'var(--orange)' },
-              { icon: '⚡', label: 'CREATE TOURNAMENT', action: () => router.push('/tournaments/create'), color: 'var(--cyan)' },
-              { icon: '✉', label: 'MESSAGES', action: () => router.push('/search'), color: 'var(--magenta)' },
-            ].map((item, i) => (
-              <button key={i} onClick={item.action} style={{
-                background: 'var(--surface)', border: '1px solid var(--border)',
-                borderRadius: '6px', padding: '1rem 1.25rem',
-                display: 'flex', alignItems: 'center', gap: '0.75rem',
-                cursor: 'pointer', transition: 'all 0.3s', textAlign: 'left', width: '100%',
-              }}
-                onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.borderColor = item.color; el.style.transform = 'translateX(4px)'; }}
-                onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.borderColor = 'var(--border)'; el.style.transform = 'translateX(0)'; }}
-              >
-                <span style={{ fontSize: '1.1rem', color: item.color, textShadow: `0 0 10px ${item.color}` }}>{item.icon}</span>
-                <span style={{ fontFamily: 'var(--font-display)', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text)', letterSpacing: '0.1em' }}>{item.label}</span>
-                <span style={{ marginLeft: 'auto', color: 'var(--text-dim)' }}>›</span>
-              </button>
-            ))}
-          </div>
+        {/* Bio display */}
+        {!editing && profile?.bio && (
+          <p style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border)', fontSize: '0.875rem', color: 'var(--text-2)', lineHeight: 1.7 }}>{profile.bio}</p>
         )}
       </div>
+
+      {/* Stats row */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginBottom: '1.5rem' }}>
+        {[
+          { label: 'Tournaments',  value: achievements.length },
+          { label: 'Completed',    value: achievements.filter(a => a.tournamentStatus === 'COMPLETED').length },
+          { label: 'With Certificate', value: achievements.filter(a => a.certificate).length },
+        ].map((s, i) => (
+          <div key={i} className="stat-card" style={{ textAlign: 'center' }}>
+            <div className="stat-number">{s.value}</div>
+            <div className="stat-label">{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Achievements */}
+      {achievements.length > 0 && (
+        <div>
+          <div className="section-hd">
+            <div className="section-title">Battle History</div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }} className="stagger">
+            {achievements.map((a: any) => (
+              <div key={a.tournamentId} className="card card-hover" style={{ padding: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: '0.9rem', marginBottom: '0.2rem' }}>{a.tournamentName}</div>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-2)' }}>{a.teamName} · {a.format}</div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+                    {a.rank && <span style={{ fontSize: '1.25rem' }}>{a.rank === 1 ? '🥇' : a.rank === 2 ? '🥈' : a.rank === 3 ? '🥉' : `#${a.rank}`}</span>}
+                    {a.certificate?.pdfUrl && (
+                      <a href={a.certificate.pdfUrl} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm">
+                        <Download size={13} /> Cert
+                      </a>
+                    )}
+                  </div>
+                </div>
+                {a.teamPoints > 0 && (
+                  <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
+                    {a.teamPoints} pts
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {achievements.length === 0 && (
+        <div className="empty-state" style={{ marginTop: '0.5rem' }}>
+          <div className="empty-icon">🏆</div>
+          <div className="empty-title">No battles yet</div>
+          <div className="empty-sub">Join a tournament to start your battle history.</div>
+          <button className="btn btn-primary btn-sm" style={{ marginTop: '1rem' }} onClick={() => router.push('/tournaments')}>
+            Find Tournaments
+          </button>
+        </div>
+      )}
     </div>
   );
 }
-

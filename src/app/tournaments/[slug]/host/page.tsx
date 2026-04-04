@@ -1,308 +1,313 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
-import { credentialsApi, pointsApi, orgHostApi, userApi } from '@/lib/api';
+import { credentialsApi, pointsApi, orgHostApi } from '@/lib/api';
+import { ArrowLeft, Send, Plus, Minus, Users, Trophy, Shield, Search, Check, Trash2, AlertCircle } from 'lucide-react';
 import axios from 'axios';
 
 const API = process.env.NEXT_PUBLIC_API_URL;
 
-export default function HostPanelPage() {
-  const params = useParams();
-  const slug = params.slug as string;
-  const router = useRouter();
+export default function HostPanelPage({ params }: { params: { slug: string } }) {
+  const { slug }   = params;
+  const router     = useRouter();
   const { user, isAuthenticated, accessToken } = useAuthStore();
-  const [mounted, setMounted] = useState(false);
 
-  // Tournament + teams data
-  const [tournament, setTournament] = useState<any>(null);
-  const [teams, setTeams] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [tournament,  setTournament]  = useState<any>(null);
+  const [teams,       setTeams]       = useState<any[]>([]);
+  const [hosts,       setHosts]       = useState<any[]>([]);
+  const [loading,     setLoading]     = useState(true);
+  const [activeSection, setSection]  = useState<'creds' | 'points' | 'hosts'>('creds');
 
-  // Credentials panel
-  const [roomId, setRoomId] = useState('');
+  // Credentials
+  const [roomId,       setRoomId]       = useState('');
   const [roomPassword, setRoomPassword] = useState('');
-  const [credMsg, setCredMsg] = useState('');
-  const [credLoading, setCredLoading] = useState(false);
+  const [credMsg,      setCredMsg]      = useState('');
+  const [credSending,  setCredSending]  = useState(false);
 
-  // Points panel
-  const [pointsMode, setPointsMode] = useState<'simple' | 'detailed'>('simple');
+  // Points
+  const [pointsMode,  setPointsMode]  = useState<'simple' | 'detailed'>('simple');
   const [matchNumber, setMatchNumber] = useState(1);
-  const [pointsData, setPointsData] = useState<Record<string, { kills: number; placement: number; totalPoints: number }>>({});
-  const [pointsMsg, setPointsMsg] = useState('');
-  const [pointsLoading, setPointsLoading] = useState(false);
+  const [pointsData,  setPointsData]  = useState<Record<string, { kills: number; placement: number; totalPoints: number }>>({});
+  const [pointsMsg,   setPointsMsg]   = useState('');
+  const [submittingFor, setSubmittingFor] = useState<string | null>(null);
 
-  // Host assignment
-  const [searchQ, setSearchQ] = useState('');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [hosts, setHosts] = useState<any[]>([]);
-  const [hostMsg, setHostMsg] = useState('');
+  // Hosts
+  const [hostSearch,   setHostSearch]   = useState('');
+  const [hostResults,  setHostResults]  = useState<any[]>([]);
+  const [hostMsg,      setHostMsg]      = useState('');
+
+  const isOrganizer = user?.role === 'ORGANIZER' || user?.role === 'SUPER_ADMIN';
 
   useEffect(() => {
-    setMounted(true);
     if (!isAuthenticated) { router.push('/auth'); return; }
-    loadData();
+    const headers = { Authorization: `Bearer ${accessToken}` };
+    axios.get(`${API}/tournaments/${slug}`, { headers })
+      .then(r => {
+        const t = r.data?.data;
+        setTournament(t);
+        if (t?.id) {
+          axios.get(`${API}/teams?tournamentId=${t.id}`, { headers }).then(r2 => setTeams(r2.data?.data || [])).catch(() => {});
+          if (isOrganizer) orgHostApi.list(t.id).then(r2 => setHosts(r2.data?.data || [])).catch(() => {});
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, [isAuthenticated, slug]);
 
-  const loadData = async () => {
+  // Role check
+  const allowed = user?.role === 'ORGANIZER' || user?.role === 'ORG_HOST' || user?.role === 'SUPER_ADMIN';
+
+  const pushCreds = async () => {
+    if (!roomId || !roomPassword || !tournament?.id) return;
+    setCredSending(true); setCredMsg('');
     try {
-      const headers = { Authorization: `Bearer ${accessToken}` };
-      const [tRes, teamsRes] = await Promise.all([
-        axios.get(`${API}/tournaments/${slug}`, { headers }),
-        axios.get(`${API}/tournaments/${slug}`, { headers }),
-      ]);
-      const t = tRes.data?.data;
-      setTournament(t);
+      await credentialsApi.push(tournament.id, roomId, roomPassword);
+      setCredMsg('Credentials broadcast to all players!');
+    } catch { setCredMsg('Failed to push credentials.'); }
+    finally { setCredSending(false); }
+  };
 
-      if (t?.id) {
-        const teamsR = await axios.get(`${API}/teams`, { params: { tournamentId: t.id }, headers }).catch(() => ({ data: { data: [] } }));
-        const confirmedTeams = (teamsR.data?.data || []);
-        setTeams(confirmedTeams);
-
-        // Initialize points data
-        const init: Record<string, any> = {};
-        confirmedTeams.forEach((team: any) => {
-          init[team.id] = { kills: 0, placement: 1, totalPoints: 0 };
-        });
-        setPointsData(init);
-
-        // Load current hosts
-        const hostsRes = await orgHostApi.list(t.id).catch(() => ({ data: { data: [] } }));
-        setHosts(hostsRes.data?.data || []);
+  const submitPoints = async (teamId: string, teamName: string) => {
+    const d = pointsData[teamId];
+    if (!d) return;
+    setSubmittingFor(teamId); setPointsMsg('');
+    try {
+      if (pointsMode === 'simple') {
+        await pointsApi.submitSimple(tournament.id, teamId, matchNumber, d.totalPoints);
+      } else {
+        await pointsApi.submitDetailed(tournament.id, teamId, matchNumber, d.kills, d.placement);
       }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
+      setPointsMsg(`Points saved for ${teamName}`);
+    } catch { setPointsMsg('Failed to save points.'); }
+    finally { setSubmittingFor(null); }
   };
 
-  // Gate: only ORGANIZER who created this tournament or ORG_HOST assigned to it
-  const isOrganizer = user?.role === 'ORGANIZER' || user?.role === 'SUPER_ADMIN';
-  const isHostRole = user?.role === 'ORG_HOST';
-  const canAccess = isOrganizer || isHostRole;
-
-  const handlePushCredentials = async () => {
-    if (!roomId.trim() || !roomPassword.trim()) { setCredMsg('⚠ Enter both Room ID and Password'); return; }
-    setCredLoading(true);
-    setCredMsg('');
+  const searchHosts = async (q: string) => {
+    setHostSearch(q);
+    if (q.trim().length < 2) { setHostResults([]); return; }
     try {
-      await credentialsApi.push(tournament.id, roomId.trim(), roomPassword.trim());
-      setCredMsg('✓ Room credentials pushed to all players!');
-    } catch (e: any) {
-      setCredMsg(`⚠ ${e.response?.data?.message || 'Failed to push credentials'}`);
-    }
-    setCredLoading(false);
+      const r = await axios.get(`${API}/users/search?q=${encodeURIComponent(q)}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+      setHostResults(r.data?.data || []);
+    } catch { setHostResults([]); }
   };
 
-  const handleSubmitPoints = async () => {
-    setPointsLoading(true);
-    setPointsMsg('');
-    let errors = 0;
-    for (const team of teams) {
-      const d = pointsData[team.id];
-      if (!d) continue;
-      try {
-        if (pointsMode === 'simple') {
-          await pointsApi.submitSimple(tournament.id, team.id, matchNumber, d.totalPoints);
-        } else {
-          await pointsApi.submitDetailed(tournament.id, team.id, matchNumber, d.kills, d.placement);
-        }
-      } catch {
-        errors++;
-      }
-    }
-    setPointsMsg(errors === 0 ? `✓ Match ${matchNumber} points saved! Leaderboard updated.` : `⚠ ${errors} team(s) failed to save.`);
-    setPointsLoading(false);
-  };
-
-  const handleSearchHosts = async () => {
-    if (!searchQ.trim()) return;
-    try {
-      const res = await userApi.search(searchQ);
-      setSearchResults(res.data?.data || []);
-    } catch {}
-  };
-
-  const handleAssignHost = async (userId: string) => {
+  const assignHost = async (userId: string) => {
+    if (!tournament?.id) return;
     setHostMsg('');
     try {
       await orgHostApi.assign(tournament.id, userId);
-      setHostMsg('✓ Host assigned!');
-      const hostsRes = await orgHostApi.list(tournament.id);
-      setHosts(hostsRes.data?.data || []);
-      setSearchResults([]);
-      setSearchQ('');
-    } catch (e: any) {
-      setHostMsg(`⚠ ${e.response?.data?.message || 'Failed to assign host'}`);
-    }
+      setHostMsg('Host assigned successfully.');
+      orgHostApi.list(tournament.id).then(r => setHosts(r.data?.data || [])).catch(() => {});
+      setHostSearch(''); setHostResults([]);
+    } catch { setHostMsg('Failed to assign host.'); }
   };
 
-  const handleRemoveHost = async (hostId: string) => {
+  const removeHost = async (id: string) => {
     try {
-      await orgHostApi.remove(hostId);
-      setHosts(prev => prev.filter(h => h.id !== hostId));
+      await orgHostApi.remove(id);
+      setHosts(h => h.filter(x => x.id !== id));
     } catch {}
   };
 
-  if (!mounted) return null;
-
-  if (!canAccess) {
-    return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '1rem' }}>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: '3rem', opacity: 0.2 }}>◈</div>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', color: 'var(--red)', letterSpacing: '0.1em' }}>ACCESS DENIED</div>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: 'var(--text-dim)' }}>Host panel is for organizers and assigned hosts only.</div>
-        <button onClick={() => router.push(`/tournaments/${slug}`)} style={{ background: 'transparent', border: '1px solid var(--orange)', color: 'var(--orange)', padding: '0.5rem 1.5rem', fontFamily: 'var(--font-mono)', fontSize: '0.7rem', cursor: 'pointer', borderRadius: '4px' }}>← BACK</button>
-      </div>
-    );
-  }
-
   if (loading) return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ width: '40px', height: '40px', border: '2px solid var(--border)', borderTopColor: 'var(--orange)', borderRightColor: 'var(--cyan)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+    <div className="page-wrapper" style={{ display: 'flex', justifyContent: 'center', padding: '4rem' }}>
+      <div className="spinner" />
     </div>
   );
 
-  const sectionStyle = { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', padding: '1.25rem', marginBottom: '1rem', position: 'relative' as const, overflow: 'hidden' as const };
-  const labelStyle = { fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--cyan)', letterSpacing: '0.2em', marginBottom: '0.75rem', display: 'block' as const };
-  const inputStyle = { width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '4px', padding: '0.65rem 0.75rem', color: 'var(--text)', fontFamily: 'var(--font-body)', fontSize: '0.9rem', outline: 'none', boxSizing: 'border-box' as const };
+  if (!allowed) return (
+    <div className="page-wrapper">
+      <div className="empty-state">
+        <AlertCircle size={40} color="var(--red)" style={{ marginBottom: '0.75rem', opacity: 0.7 }} />
+        <div className="empty-title">Access Denied</div>
+        <div className="empty-sub">Host or Organizer access required.</div>
+        <button className="btn btn-ghost btn-sm" style={{ marginTop: '1rem' }} onClick={() => router.back()}>Go Back</button>
+      </div>
+    </div>
+  );
+
+  const sections = [
+    { key: 'creds',  label: 'Room Creds', icon: Shield },
+    { key: 'points', label: 'Points',     icon: Trophy },
+    ...(isOrganizer ? [{ key: 'hosts', label: 'Hosts', icon: Users }] : []),
+  ];
 
   return (
-    <div style={{ minHeight: '100vh', paddingBottom: '80px', animation: mounted ? 'pageEnter 0.4s ease forwards' : 'none' }}>
+    <div className="page-wrapper">
       {/* Header */}
-      <div style={{ background: 'rgba(3,3,8,0.95)', backdropFilter: 'blur(20px)', borderBottom: '1px solid var(--border)', padding: '1rem', position: 'sticky', top: 0, zIndex: 40 }}>
-        <div style={{ maxWidth: 'var(--content-max)', margin: '0 auto', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <button onClick={() => router.push(`/tournaments/${slug}`)} style={{ background: 'transparent', border: '1px solid var(--border2)', color: 'var(--text-dim)', width: '32px', height: '32px', borderRadius: '4px', cursor: 'pointer', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>‹</button>
-          <div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: '0.95rem', fontWeight: 800, color: 'var(--orange)', letterSpacing: '0.05em' }}>{tournament?.name || 'HOST PANEL'}</div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.6rem', color: 'var(--text-dim)', letterSpacing: '0.2em' }}>⚙ HOST CONTROL</div>
-          </div>
-        </div>
+      <button className="btn btn-ghost btn-sm" style={{ marginBottom: '1.25rem' }} onClick={() => router.push(`/tournaments/${slug}`)}>
+        <ArrowLeft size={16} /> Back to Tournament
+      </button>
+      <div className="page-header">
+        <h1 className="page-title">Host Panel</h1>
+        <p className="page-sub">{tournament?.name}</p>
       </div>
 
-      <div style={{ maxWidth: 'var(--content-max)', margin: '0 auto', padding: '1rem' }}>
-
-        {/* ── ROOM CREDENTIALS ── */}
-        <div style={sectionStyle}>
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px', background: 'linear-gradient(90deg, transparent, var(--orange), transparent)' }} />
-          <span style={labelStyle}>// PUSH ROOM CREDENTIALS</span>
-          <div style={{ marginBottom: '0.75rem' }}>
-            <label style={{ fontFamily: 'var(--font-mono)', fontSize: '0.6rem', color: 'var(--text-dim)', letterSpacing: '0.1em', display: 'block', marginBottom: '0.3rem' }}>ROOM ID</label>
-            <input style={inputStyle} value={roomId} onChange={e => setRoomId(e.target.value)} placeholder="e.g. 8472910" />
-          </div>
-          <div style={{ marginBottom: '1rem' }}>
-            <label style={{ fontFamily: 'var(--font-mono)', fontSize: '0.6rem', color: 'var(--text-dim)', letterSpacing: '0.1em', display: 'block', marginBottom: '0.3rem' }}>ROOM PASSWORD</label>
-            <input style={inputStyle} value={roomPassword} onChange={e => setRoomPassword(e.target.value)} placeholder="e.g. FF2024" />
-          </div>
-          <button onClick={handlePushCredentials} disabled={credLoading} style={{ width: '100%', padding: '0.75rem', background: credLoading ? 'rgba(255,107,43,0.3)' : 'linear-gradient(135deg, var(--orange), #cc4400)', border: 'none', color: '#fff', fontFamily: 'var(--font-display)', fontSize: '0.8rem', fontWeight: 700, letterSpacing: '0.1em', cursor: credLoading ? 'not-allowed' : 'pointer', borderRadius: '4px', boxShadow: credLoading ? 'none' : '0 0 15px var(--orange-glow)' }}>
-            {credLoading ? 'PUSHING...' : '📡 PUSH TO ALL PLAYERS'}
+      {/* Section tabs */}
+      <div className="tab-bar" style={{ marginBottom: '1.75rem' }}>
+        {sections.map(({ key, label, icon: Icon }) => (
+          <button key={key} className={`tab${activeSection === key ? ' active' : ''}`} onClick={() => setSection(key as any)}>
+            <Icon size={14} /> {label}
           </button>
-          {credMsg && <div style={{ marginTop: '0.5rem', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: credMsg.startsWith('✓') ? 'var(--green)' : 'var(--red)', textAlign: 'center' }}>{credMsg}</div>}
-        </div>
+        ))}
+      </div>
 
-        {/* ── MATCH POINTS ── */}
-        <div style={sectionStyle}>
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px', background: 'linear-gradient(90deg, transparent, var(--cyan), transparent)' }} />
-          <span style={labelStyle}>// MATCH POINTS ENTRY</span>
-
-          {/* Match number + mode toggle */}
-          <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', alignItems: 'center' }}>
-            <div style={{ flex: 1 }}>
-              <label style={{ fontFamily: 'var(--font-mono)', fontSize: '0.6rem', color: 'var(--text-dim)', letterSpacing: '0.1em', display: 'block', marginBottom: '0.3rem' }}>MATCH #</label>
-              <input type="number" min={1} value={matchNumber} onChange={e => setMatchNumber(Number(e.target.value))} style={{ ...inputStyle, width: '80px' }} />
+      {/* ── Room Credentials ── */}
+      {activeSection === 'creds' && (
+        <div className="card" style={{ padding: '1.5rem' }}>
+          <div style={{ marginBottom: '1.25rem' }}>
+            <div style={{ fontWeight: 700, marginBottom: '0.25rem' }}>Push Room Credentials</div>
+            <div style={{ fontSize: '0.825rem', color: 'var(--text-2)' }}>All registered players will receive these in real time.</div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem', marginBottom: '1.25rem' }}>
+            <div>
+              <label className="input-label">Room ID</label>
+              <input className="input" placeholder="e.g. 1234567" value={roomId} onChange={e => setRoomId(e.target.value)} />
             </div>
-            <div style={{ display: 'flex', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '4px', overflow: 'hidden' }}>
-              {(['simple', 'detailed'] as const).map(m => (
-                <button key={m} onClick={() => setPointsMode(m)} style={{ padding: '0.5rem 0.75rem', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: '0.6rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' as const, background: pointsMode === m ? 'var(--orange)' : 'transparent', color: pointsMode === m ? '#fff' : 'var(--text-dim)', transition: 'all 0.2s' }}>{m}</button>
-              ))}
+            <div>
+              <label className="input-label">Room Password</label>
+              <input className="input" placeholder="e.g. clutch2024" value={roomPassword} onChange={e => setRoomPassword(e.target.value)} />
+            </div>
+          </div>
+          <button className="btn btn-primary" onClick={pushCreds} disabled={credSending || !roomId || !roomPassword}>
+            {credSending ? 'Pushing…' : <><Send size={15} /> Broadcast Credentials</>}
+          </button>
+          {credMsg && (
+            <div style={{ marginTop: '0.875rem', fontSize: '0.825rem', color: credMsg.includes('!') ? 'var(--green)' : 'var(--red)' }}>{credMsg}</div>
+          )}
+        </div>
+      )}
+
+      {/* ── Points Entry ── */}
+      {activeSection === 'points' && (
+        <div>
+          {/* Controls */}
+          <div className="card" style={{ padding: '1.25rem', marginBottom: '1rem' }}>
+            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+              <div>
+                <label className="input-label">Match #</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setMatchNumber(m => Math.max(1, m - 1))}><Minus size={14} /></button>
+                  <span style={{ fontWeight: 700, minWidth: 24, textAlign: 'center' }}>{matchNumber}</span>
+                  <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setMatchNumber(m => m + 1)}><Plus size={14} /></button>
+                </div>
+              </div>
+              <div>
+                <label className="input-label">Entry Mode</label>
+                <div className="tab-bar" style={{ width: 'auto' }}>
+                  <button className={`tab${pointsMode === 'simple' ? ' active' : ''}`} onClick={() => setPointsMode('simple')}>Simple</button>
+                  <button className={`tab${pointsMode === 'detailed' ? ' active' : ''}`} onClick={() => setPointsMode('detailed')}>Detailed</button>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Teams table */}
+          {pointsMsg && (
+            <div style={{ padding: '0.625rem 0.875rem', borderRadius: 8, background: 'var(--green-dim)', border: '1px solid rgba(0,232,117,0.25)', fontSize: '0.825rem', color: 'var(--green)', marginBottom: '0.875rem' }}>
+              {pointsMsg}
+            </div>
+          )}
+
           {teams.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '1.5rem', fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: 'var(--text-dim)' }}>No registered teams yet</div>
+            <div className="empty-state">
+              <div className="empty-icon">👥</div>
+              <div className="empty-title">No teams registered</div>
+              <div className="empty-sub">Teams will appear here once registered.</div>
+            </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
-              {/* Header */}
-              <div style={{ display: 'grid', gridTemplateColumns: pointsMode === 'simple' ? '1fr 100px' : '1fr 70px 70px', gap: '0.5rem', padding: '0 0.5rem' }}>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.55rem', color: 'var(--text-dim)', letterSpacing: '0.1em' }}>TEAM</span>
-                {pointsMode === 'simple' ? (
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.55rem', color: 'var(--text-dim)', letterSpacing: '0.1em', textAlign: 'center' }}>TOTAL PTS</span>
-                ) : (
-                  <>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.55rem', color: 'var(--text-dim)', letterSpacing: '0.1em', textAlign: 'center' }}>KILLS</span>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.55rem', color: 'var(--text-dim)', letterSpacing: '0.1em', textAlign: 'center' }}>PLACE</span>
-                  </>
-                )}
-              </div>
-              {teams.map(team => {
-                const d = pointsData[team.id] || { kills: 0, placement: 1, totalPoints: 0 };
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {teams.map((team: any) => {
+                const d = pointsData[team.id] ?? { kills: 0, placement: 1, totalPoints: 0 };
+                const set = (k: string, v: number) => setPointsData(p => ({ ...p, [team.id]: { ...d, [k]: v } }));
                 return (
-                  <div key={team.id} style={{ display: 'grid', gridTemplateColumns: pointsMode === 'simple' ? '1fr 100px' : '1fr 70px 70px', gap: '0.5rem', alignItems: 'center', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '4px', padding: '0.5rem' }}>
-                    <span style={{ fontFamily: 'var(--font-display)', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{team.name || team.teamName}</span>
-                    {pointsMode === 'simple' ? (
-                      <input type="number" min={0} value={d.totalPoints} onChange={e => setPointsData(prev => ({ ...prev, [team.id]: { ...prev[team.id], totalPoints: Number(e.target.value) } }))} style={{ ...inputStyle, padding: '0.4rem 0.5rem', textAlign: 'center', width: '100%' }} />
-                    ) : (
-                      <>
-                        <input type="number" min={0} value={d.kills} onChange={e => setPointsData(prev => ({ ...prev, [team.id]: { ...prev[team.id], kills: Number(e.target.value) } }))} style={{ ...inputStyle, padding: '0.4rem 0.5rem', textAlign: 'center', width: '100%' }} />
-                        <input type="number" min={1} max={25} value={d.placement} onChange={e => setPointsData(prev => ({ ...prev, [team.id]: { ...prev[team.id], placement: Number(e.target.value) } }))} style={{ ...inputStyle, padding: '0.4rem 0.5rem', textAlign: 'center', width: '100%' }} />
-                      </>
-                    )}
+                  <div key={team.id} className="card" style={{ padding: '1.125rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+                      <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{team.name}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                        {pointsMode === 'detailed' ? (
+                          <>
+                            <div>
+                              <label className="input-label" style={{ marginBottom: 2 }}>Kills</label>
+                              <input type="number" className="input" style={{ width: 80 }} min={0} value={d.kills} onChange={e => set('kills', +e.target.value)} />
+                            </div>
+                            <div>
+                              <label className="input-label" style={{ marginBottom: 2 }}>Placement</label>
+                              <input type="number" className="input" style={{ width: 80 }} min={1} value={d.placement} onChange={e => set('placement', +e.target.value)} />
+                            </div>
+                          </>
+                        ) : (
+                          <div>
+                            <label className="input-label" style={{ marginBottom: 2 }}>Total Points</label>
+                            <input type="number" className="input" style={{ width: 100 }} min={0} value={d.totalPoints} onChange={e => set('totalPoints', +e.target.value)} />
+                          </div>
+                        )}
+                        <div style={{ alignSelf: 'flex-end' }}>
+                          <button className="btn btn-primary btn-sm" onClick={() => submitPoints(team.id, team.name)} disabled={submittingFor === team.id}>
+                            {submittingFor === team.id ? '…' : <><Check size={14} /> Save</>}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 );
               })}
             </div>
           )}
-
-          <button onClick={handleSubmitPoints} disabled={pointsLoading || teams.length === 0} style={{ width: '100%', padding: '0.75rem', background: (pointsLoading || teams.length === 0) ? 'rgba(0,245,255,0.15)' : 'linear-gradient(135deg, #006688, #00a0cc)', border: 'none', color: '#fff', fontFamily: 'var(--font-display)', fontSize: '0.8rem', fontWeight: 700, letterSpacing: '0.1em', cursor: (pointsLoading || teams.length === 0) ? 'not-allowed' : 'pointer', borderRadius: '4px', boxShadow: pointsLoading ? 'none' : '0 0 15px rgba(0,245,255,0.2)' }}>
-            {pointsLoading ? 'SAVING...' : `✓ SUBMIT MATCH ${matchNumber} POINTS`}
-          </button>
-          {pointsMsg && <div style={{ marginTop: '0.5rem', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: pointsMsg.startsWith('✓') ? 'var(--green)' : 'var(--red)', textAlign: 'center' }}>{pointsMsg}</div>}
         </div>
+      )}
 
-        {/* ── HOST ASSIGNMENT (Organizer only) ── */}
-        {isOrganizer && (
-          <div style={sectionStyle}>
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px', background: 'linear-gradient(90deg, transparent, var(--magenta, #ff00aa), transparent)' }} />
-            <span style={labelStyle}>// MANAGE HOSTS</span>
-
-            {/* Current hosts */}
-            {hosts.length > 0 && (
-              <div style={{ marginBottom: '1rem' }}>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.6rem', color: 'var(--text-dim)', letterSpacing: '0.1em', marginBottom: '0.5rem' }}>ASSIGNED HOSTS</div>
-                {hosts.map(h => (
-                  <div key={h.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0.75rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '4px', marginBottom: '0.4rem' }}>
-                    <div>
-                      <span style={{ fontFamily: 'var(--font-display)', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text)' }}>{h.displayName || h.username}</span>
-                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.6rem', color: 'var(--text-dim)', marginLeft: '0.5rem' }}>@{h.username}</span>
-                    </div>
-                    <button onClick={() => handleRemoveHost(h.id)} style={{ background: 'transparent', border: '1px solid var(--red)', color: 'var(--red)', padding: '0.25rem 0.6rem', fontFamily: 'var(--font-mono)', fontSize: '0.6rem', cursor: 'pointer', borderRadius: '4px' }}>REMOVE</button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Search + assign */}
-            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
-              <input style={{ ...inputStyle, flex: 1 }} value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Search username..." onKeyDown={e => e.key === 'Enter' && handleSearchHosts()} />
-              <button onClick={handleSearchHosts} style={{ padding: '0 1rem', background: 'var(--surface)', border: '1px solid var(--border2)', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: '0.65rem', cursor: 'pointer', borderRadius: '4px', whiteSpace: 'nowrap' }}>SEARCH</button>
+      {/* ── Manage Hosts ── */}
+      {activeSection === 'hosts' && isOrganizer && (
+        <div>
+          <div className="card" style={{ padding: '1.5rem', marginBottom: '1.25rem' }}>
+            <div style={{ fontWeight: 700, marginBottom: '1rem' }}>Assign Host</div>
+            <div style={{ position: 'relative', marginBottom: '0.75rem' }}>
+              <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-3)', pointerEvents: 'none' }} />
+              <input className="input" style={{ paddingLeft: '2.5rem' }} placeholder="Search by username…" value={hostSearch} onChange={e => searchHosts(e.target.value)} />
             </div>
-            {searchResults.length > 0 && (
-              <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '4px', overflow: 'hidden' }}>
-                {searchResults.map((u: any) => (
-                  <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0.75rem', borderBottom: '1px solid var(--border)' }}>
-                    <span style={{ fontFamily: 'var(--font-display)', fontSize: '0.85rem', color: 'var(--text)' }}>{u.displayName || u.username}</span>
-                    <button onClick={() => handleAssignHost(u.id)} style={{ background: 'var(--orange)', border: 'none', color: '#fff', padding: '0.25rem 0.75rem', fontFamily: 'var(--font-mono)', fontSize: '0.6rem', cursor: 'pointer', borderRadius: '4px' }}>ASSIGN</button>
+            {hostResults.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+                {hostResults.map(u => (
+                  <div key={u.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.625rem 0.875rem', background: 'var(--surface)', borderRadius: 8 }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{u.displayName || u.username}</div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-3)' }}>@{u.username} · {u.role}</div>
+                    </div>
+                    <button className="btn btn-primary btn-sm" onClick={() => assignHost(u.id)}>
+                      <Plus size={14} /> Assign
+                    </button>
                   </div>
                 ))}
               </div>
             )}
-            {hostMsg && <div style={{ marginTop: '0.5rem', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: hostMsg.startsWith('✓') ? 'var(--green)' : 'var(--red)', textAlign: 'center' }}>{hostMsg}</div>}
+            {hostMsg && <div style={{ marginTop: '0.75rem', fontSize: '0.825rem', color: hostMsg.includes('success') ? 'var(--green)' : 'var(--red)' }}>{hostMsg}</div>}
           </div>
-        )}
 
-      </div>
+          {/* Current hosts */}
+          <div className="section-hd"><div className="section-title">Current Hosts</div></div>
+          {hosts.length === 0 ? (
+            <div className="empty-state" style={{ padding: '2rem' }}>
+              <div className="empty-title">No hosts assigned</div>
+              <div className="empty-sub">Search above to assign a host.</div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {hosts.map((h: any) => (
+                <div key={h.id} className="card" style={{ padding: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{h.displayName || h.username}</div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-3)' }}>@{h.username}</div>
+                  </div>
+                  <button className="btn btn-ghost btn-sm" style={{ color: 'var(--red)' }} onClick={() => removeHost(h.id)}>
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

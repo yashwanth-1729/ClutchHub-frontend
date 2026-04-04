@@ -2,170 +2,127 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
+import { Plus, Trophy } from 'lucide-react';
 import axios from 'axios';
 
 const API = process.env.NEXT_PUBLIC_API_URL;
 
+const STATUS_COLOR: Record<string, string> = {
+  ONGOING: 'var(--red)', OPEN: 'var(--green)', UPCOMING: 'var(--blue)',
+  COMPLETED: 'var(--text-3)', FULL: 'var(--amber)',
+};
+
+function TCard({ t }: { t: any }) {
+  const router = useRouter();
+  const color = STATUS_COLOR[t.status] || 'var(--text-3)';
+  return (
+    <div className="card card-hover card-clickable" style={{ padding: '1.25rem' }} onClick={() => router.push(`/tournaments/${t.slug}`)}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.75rem', marginBottom: '0.875rem' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
+            <div style={{ width: 6, height: 6, borderRadius: '50%', background: color, boxShadow: `0 0 6px ${color}`, flexShrink: 0 }} />
+            <span style={{ fontSize: '0.68rem', color, textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>{t.status}</span>
+          </div>
+          <div style={{ fontWeight: 700, fontSize: '0.925rem', lineHeight: 1.3 }}>{t.name}</div>
+        </div>
+        <div style={{ fontWeight: 700, color: 'var(--green)', fontSize: '1rem', flexShrink: 0 }}>
+          {t.prizePool > 0 ? `₹${t.prizePool.toLocaleString('en-IN')}` : 'Free'}
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: '1.25rem', flexWrap: 'wrap' }}>
+        {[
+          { label: 'Format', value: t.format },
+          { label: 'Entry',  value: t.entryFee > 0 ? `₹${t.entryFee}` : 'Free' },
+          { label: 'Teams',  value: `${t.registeredTeams ?? 0}/${t.maxTeams}` },
+          t.scheduledAt ? { label: 'Date', value: new Date(t.scheduledAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) } : null,
+        ].filter(Boolean).map((item: any) => (
+          <div key={item.label}>
+            <div style={{ fontSize: '0.62rem', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{item.label}</div>
+            <div style={{ fontSize: '0.8rem', fontWeight: 600 }}>{item.value}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function MyTeamsPage() {
   const router = useRouter();
-  const { isAuthenticated, accessToken } = useAuthStore();
-  const [tab, setTab] = useState<'joined' | 'created'>('joined');
-  const [joined, setJoined] = useState<any[]>([]);
+  const { isAuthenticated, accessToken, user } = useAuthStore();
+  const [tab,     setTab]     = useState<'joined' | 'created'>('joined');
+  const [joined,  setJoined]  = useState<any[]>([]);
   const [created, setCreated] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [mounted, setMounted] = useState(false);
+  const canCreate = user?.role === 'ORGANIZER' || user?.role === 'SUPER_ADMIN';
 
   useEffect(() => {
-    setMounted(true);
     if (!isAuthenticated) { router.push('/auth'); return; }
     const headers = { Authorization: `Bearer ${accessToken}` };
     Promise.all([
       axios.get(`${API}/tournaments/joined`, { headers }),
-      axios.get(`${API}/tournaments/mine`, { headers }),
+      axios.get(`${API}/tournaments/mine`,   { headers }),
     ]).then(([j, c]) => {
       setJoined(j.data?.data || []);
       setCreated(c.data?.data?.content || []);
     }).catch(() => {}).finally(() => setLoading(false));
   }, [isAuthenticated]);
 
-  const statusColors: Record<string, string> = {
-    UPCOMING: 'var(--cyan)', LIVE: 'var(--red)', COMPLETED: 'var(--text-dim)',
-    ONGOING: 'var(--red)', OPEN: 'var(--green)',
-  };
-
-  const TCard = ({ t }: { t: any }) => (
-    <div onClick={() => router.push(`/tournaments/${t.slug}`)} style={{
-      background: 'var(--surface)', border: '1px solid var(--border)',
-      borderRadius: '8px', padding: '1.25rem', cursor: 'pointer',
-      transition: 'all 0.3s', position: 'relative', overflow: 'hidden',
-    }}
-      onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.borderColor = 'var(--orange)'; el.style.transform = 'translateY(-2px)'; el.style.boxShadow = '0 8px 30px rgba(255,107,43,0.15)'; }}
-      onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.borderColor = 'var(--border)'; el.style.transform = 'translateY(0)'; el.style.boxShadow = 'none'; }}
-    >
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px', background: 'linear-gradient(90deg, transparent, var(--orange), transparent)', opacity: 0.5 }} />
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
-        <div style={{ flex: 1 }}>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.6rem', color: statusColors[t.status] || 'var(--text-dim)', letterSpacing: '0.1em' }}>
-            {t.status === 'LIVE' || t.status === 'ONGOING' ? '● LIVE' : t.status === 'UPCOMING' ? '◈ UPCOMING' : '◉ ENDED'}
-          </span>
-          <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '0.95rem', fontWeight: 700, color: 'var(--text)', marginTop: '2px', letterSpacing: '0.05em' }}>{t.name}</h3>
-        </div>
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', fontWeight: 800, background: 'linear-gradient(135deg, var(--gold), var(--orange))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            ₹{t.prizePool?.toLocaleString() || '0'}
-          </div>
-        </div>
-      </div>
-      <div style={{ display: 'flex', gap: '1rem' }}>
-        <div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.55rem', color: 'var(--text-dim)', letterSpacing: '0.1em' }}>ENTRY</div>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: '0.75rem', color: 'var(--cyan)', fontWeight: 600 }}>{t.entryFee === 0 ? 'FREE' : `₹${t.entryFee}`}</div>
-        </div>
-        <div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.55rem', color: 'var(--text-dim)', letterSpacing: '0.1em' }}>FORMAT</div>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: '0.75rem', color: 'var(--text)', fontWeight: 600 }}>{t.format}</div>
-        </div>
-        <div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.55rem', color: 'var(--text-dim)', letterSpacing: '0.1em' }}>TEAMS</div>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: '0.75rem', color: 'var(--text)', fontWeight: 600 }}>{t.registeredTeams}/{t.maxTeams}</div>
-        </div>
-        {t.scheduledAt && (
-          <div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.55rem', color: 'var(--text-dim)', letterSpacing: '0.1em' }}>DATE</div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: '0.75rem', color: 'var(--text)', fontWeight: 600 }}>
-              {new Date(t.scheduledAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-
+  if (!isAuthenticated) return null;
   const current = tab === 'joined' ? joined : created;
 
   return (
-    <div style={{ minHeight: '100vh', paddingBottom: '80px', animation: mounted ? 'pageEnter 0.4s ease forwards' : 'none' }}>
+    <div className="page-wrapper">
       {/* Header */}
-      <div style={{ background: 'rgba(3,3,8,0.95)', backdropFilter: 'blur(20px)', borderBottom: '1px solid var(--border)', padding: '1rem', position: 'sticky', top: 0, zIndex: 40 }}>
-        <div style={{ maxWidth: 'var(--content-max)', margin: '0 auto' }}>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', fontWeight: 900, color: 'var(--orange)', letterSpacing: '0.1em', textShadow: '0 0 15px var(--orange-glow)' }}>MY BATTLES</h1>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.6rem', color: 'var(--text-dim)', letterSpacing: '0.2em' }}>SQUAD DASHBOARD</div>
+      <div className="page-header" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+        <div>
+          <h1 className="page-title">My Battles</h1>
+          <p className="page-sub">Your tournament history</p>
         </div>
-      </div>
-
-      <div style={{ maxWidth: 'var(--content-max)', margin: '0 auto', padding: '1rem' }}>
-        {/* Stats */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1.25rem' }}>
-          {[
-            { label: 'JOINED', value: joined.length, color: 'var(--cyan)' },
-            { label: 'CREATED', value: created.length, color: 'var(--orange)' },
-          ].map((s, i) => (
-            <div key={i} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', padding: '1rem', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
-              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '2px', background: s.color, boxShadow: `0 0 8px ${s.color}` }} />
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', fontWeight: 900, color: s.color, textShadow: `0 0 15px ${s.color}` }}>{s.value}</div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.6rem', color: 'var(--text-dim)', letterSpacing: '0.1em' }}>{s.label}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* Tabs */}
-        <div style={{ display: 'flex', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '6px', padding: '3px', marginBottom: '1.25rem' }}>
-          {(['joined', 'created'] as const).map(t => (
-            <button key={t} onClick={() => setTab(t)} style={{
-              flex: 1, padding: '0.6rem', border: 'none', cursor: 'pointer',
-              fontFamily: 'var(--font-display)', fontSize: '0.75rem', fontWeight: 700,
-              letterSpacing: '0.1em', textTransform: 'uppercase', borderRadius: '4px',
-              background: tab === t ? 'var(--orange)' : 'transparent',
-              color: tab === t ? '#fff' : 'var(--text-dim)',
-              boxShadow: tab === t ? '0 0 12px var(--orange-glow)' : 'none',
-              transition: 'all 0.3s',
-            }}>{t === 'joined' ? '⚡ JOINED' : '◈ CREATED'}</button>
-          ))}
-        </div>
-
-        {/* Create button */}
-        {tab === 'created' && (
-          <button onClick={() => router.push('/tournaments/create')} style={{
-            width: '100%', padding: '0.875rem', marginBottom: '1rem',
-            background: 'linear-gradient(135deg, var(--orange), #cc4400)',
-            color: '#fff', border: 'none', cursor: 'pointer',
-            fontFamily: 'var(--font-display)', fontSize: '0.8rem', fontWeight: 700,
-            letterSpacing: '0.15em', borderRadius: '4px',
-            clipPath: 'polygon(10px 0%, 100% 0%, calc(100% - 10px) 100%, 0% 100%)',
-            boxShadow: '0 0 20px var(--orange-glow)',
-          }}>+ CREATE NEW BATTLE</button>
-        )}
-
-        {/* List */}
-        {loading ? (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: '3rem' }}>
-            <div style={{ width: '40px', height: '40px', border: '2px solid var(--border)', borderTopColor: 'var(--orange)', borderRightColor: 'var(--cyan)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-          </div>
-        ) : current.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '3rem 1rem', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px' }}>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: '2.5rem', opacity: 0.2, marginBottom: '0.75rem' }}>◈</div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-dim)', letterSpacing: '0.2em' }}>
-              {tab === 'joined' ? 'NO BATTLES JOINED YET' : 'NO BATTLES CREATED YET'}
-            </div>
-            <button onClick={() => router.push(tab === 'joined' ? '/tournaments' : '/tournaments/create')} style={{
-              marginTop: '1rem', background: 'transparent', border: '1px solid var(--orange)',
-              color: 'var(--orange)', padding: '0.5rem 1.5rem',
-              fontFamily: 'var(--font-mono)', fontSize: '0.7rem', cursor: 'pointer',
-              borderRadius: '4px', letterSpacing: '0.1em',
-            }}>
-              {tab === 'joined' ? 'FIND BATTLES →' : 'CREATE BATTLE →'}
-            </button>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            {current.map((t, i) => (
-              <div key={t.id || i} style={{ animation: `pageEnter 0.4s ease ${i * 0.05}s both` }}>
-                <TCard t={t} />
-              </div>
-            ))}
-          </div>
+        {canCreate && (
+          <button className="btn btn-primary btn-sm" onClick={() => router.push('/tournaments/create')}>
+            <Plus size={15} /> Create
+          </button>
         )}
       </div>
+
+      {/* Stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1.5rem' }}>
+        {[
+          { label: 'Joined',  value: joined.length,  color: 'var(--red)' },
+          { label: 'Created', value: created.length, color: 'var(--green)' },
+        ].map(s => (
+          <div key={s.label} className="stat-card" style={{ textAlign: 'center' }}>
+            <div className="stat-number" style={{ color: s.color }}>{s.value}</div>
+            <div className="stat-label">{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Tabs */}
+      <div className="tab-bar" style={{ marginBottom: '1.5rem' }}>
+        <button className={`tab${tab === 'joined' ? ' active' : ''}`} onClick={() => setTab('joined')}>Joined</button>
+        <button className={`tab${tab === 'created' ? ' active' : ''}`} onClick={() => setTab('created')}>Created</button>
+      </div>
+
+      {/* List */}
+      {loading ? (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '3rem' }}>
+          <div className="spinner" />
+        </div>
+      ) : current.length === 0 ? (
+        <div className="empty-state">
+          <div className="empty-icon">🏆</div>
+          <div className="empty-title">{tab === 'joined' ? 'No tournaments joined yet' : 'No tournaments created yet'}</div>
+          <div className="empty-sub">{tab === 'joined' ? 'Browse the arena and join a battle.' : 'Create your first tournament.'}</div>
+          <button className="btn btn-primary btn-sm" style={{ marginTop: '1rem' }} onClick={() => router.push(tab === 'joined' ? '/tournaments' : '/tournaments/create')}>
+            {tab === 'joined' ? 'Browse Arena' : 'Create Tournament'}
+          </button>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }} className="stagger">
+          {current.map(t => <TCard key={t.id} t={t} />)}
+        </div>
+      )}
     </div>
   );
 }

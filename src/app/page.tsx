@@ -3,174 +3,121 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import { tournamentApi } from '@/lib/api';
-
-function GlitchText({ text, size = '3rem' }: { text: string; size?: string }) {
-  return (
-    <span className="glitch" data-text={text} style={{
-      fontFamily: 'var(--font-display)', fontSize: size, fontWeight: 900,
-      letterSpacing: '0.05em', color: 'var(--orange)',
-      textShadow: '0 0 20px var(--orange-glow), 0 0 60px rgba(255,107,43,0.15)',
-    }}>{text}</span>
-  );
-}
-
-function FloatingParticles() {
-  return (
-    <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0, overflow: 'hidden' }}>
-      {Array.from({ length: 25 }).map((_, i) => (
-        <div key={i} style={{
-          position: 'absolute',
-          width: `${1 + (i % 3)}px`,
-          height: `${1 + (i % 3)}px`,
-          background: [
-            'var(--orange)', 'var(--cyan)', 'var(--gold)', 'var(--magenta)'
-          ][i % 4],
-          borderRadius: '50%',
-          left: `${(i * 4.1) % 100}%`,
-          bottom: '-10px',
-          opacity: 0.6 + (i % 4) * 0.1,
-          boxShadow: `0 0 ${4 + i % 6}px currentColor`,
-          animation: `float ${7 + (i % 10)}s linear ${i * 0.3}s infinite`,
-          '--drift': `${(i % 7 - 3) * 25}px`,
-        } as React.CSSProperties} />
-      ))}
-    </div>
-  );
-}
+import { Trophy, Zap, Users, Shield, ArrowRight, ChevronRight } from 'lucide-react';
 
 export default function HomePage() {
   const router = useRouter();
   const { isAuthenticated } = useAuthStore();
-  const [mounted, setMounted] = useState(false);
-  const [totalTournaments, setTotalTournaments] = useState<number | null>(null);
-  const [activeTournaments, setActiveTournaments] = useState<number | null>(null);
+  const [stats, setStats] = useState({ total: 0, live: 0 });
 
   useEffect(() => {
-    setMounted(true);
-    tournamentApi.list(0, 1).then(r => setTotalTournaments(r.data?.data?.totalElements ?? null)).catch(() => {});
-    tournamentApi.list(0, 1, 'ONGOING').then(r => setActiveTournaments(r.data?.data?.totalElements ?? null)).catch(() => {});
+    tournamentApi.list(0, 1).then(r => {
+      const total = r.data?.data?.totalElements ?? 0;
+      setStats(s => ({ ...s, total }));
+    }).catch(() => {});
+    tournamentApi.list(0, 1, 'ONGOING').then(r => {
+      const live = r.data?.data?.totalElements ?? 0;
+      setStats(s => ({ ...s, live }));
+    }).catch(() => {});
   }, []);
 
-  const stats = [
-    { label: 'ACTIVE PLAYERS', value: '12K+', color: 'var(--orange)' },
-    { label: 'TOURNAMENTS', value: totalTournaments !== null ? `${totalTournaments}` : '...', color: 'var(--cyan)' },
-    { label: 'LIVE NOW', value: activeTournaments !== null ? `${activeTournaments}` : '...', color: 'var(--gold)' },
-  ];
-
   const features = [
-    { icon: '⚡', title: 'INSTANT SQUADS', desc: 'Form your team in seconds' },
-    { icon: '🏆', title: 'LIVE LEADERBOARD', desc: 'Real-time battle rankings' },
-    { icon: '💰', title: 'CASH PRIZES', desc: 'Win real money every day' },
-    { icon: '🎯', title: 'DAILY TOURNEYS', desc: 'New battles every 24h' },
+    { icon: Zap,     title: 'Instant Registration', desc: 'Register your squad in seconds and jump straight into the action.' },
+    { icon: Trophy,  title: 'Live Leaderboards',    desc: 'Real-time rankings update as the match progresses.' },
+    { icon: Users,   title: 'Squad Management',     desc: 'Build your team, track stats, and coordinate with ease.' },
+    { icon: Shield,  title: 'Verified Organizers',  desc: 'Every tournament is run by a verified organizer.' },
   ];
 
   return (
-    <div style={{ minHeight: '100vh', paddingBottom: '80px', position: 'relative' }}>
-      <FloatingParticles />
-
-      {/* Hero */}
-      <div style={{
-        position: 'relative', zIndex: 10, padding: '4rem 1.5rem 2rem',
-        textAlign: 'center', maxWidth: 'var(--content-max)', margin: '0 auto',
-        animation: mounted ? 'pageEnter 0.6s ease forwards' : 'none',
-      }}>
-        {/* Badge */}
-        <div style={{
-          display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
-          background: 'rgba(255,107,43,0.1)', border: '1px solid rgba(255,107,43,0.3)',
-          borderRadius: '20px', padding: '0.3rem 0.9rem', marginBottom: '1.5rem',
-        }}>
-          <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--red)', animation: 'livePulse 1.5s infinite' }} />
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--orange)', letterSpacing: '0.2em' }}>FREE FIRE ESPORTS PLATFORM</span>
+    <div className="page-wrapper">
+      {/* ── Hero ── */}
+      <section style={{ textAlign: 'center', padding: '3rem 1rem 4rem', maxWidth: 640, margin: '0 auto' }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', background: 'var(--red-dim)', border: '1px solid rgba(251,54,64,0.25)', borderRadius: 100, padding: '0.3rem 0.875rem', marginBottom: '1.5rem' }}>
+          <span className="live-dot" />
+          <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--red)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+            {stats.live > 0 ? `${stats.live} Live Now` : 'Free Fire Esports'}
+          </span>
         </div>
 
-        <div style={{ marginBottom: '1rem' }}>
-          <GlitchText text="CLUTCH" size="clamp(2.5rem, 10vw, 4rem)" />
-          <br />
-          <GlitchText text="HUB" size="clamp(2.5rem, 10vw, 4rem)" />
-        </div>
+        <h1 style={{ fontSize: 'clamp(2.4rem, 7vw, 4.5rem)', fontWeight: 700, letterSpacing: '-0.03em', lineHeight: 1.1, color: 'var(--text)', marginBottom: '1.25rem' }}>
+          Compete.<br />
+          <span style={{ color: 'var(--red)' }}>Win Big.</span><br />
+          Clutch.
+        </h1>
 
-        <p style={{
-          fontFamily: 'var(--font-body)', fontSize: '1.1rem', fontWeight: 500,
-          color: 'var(--text-dim)', marginBottom: '2rem', lineHeight: 1.6,
-          maxWidth: '320px', margin: '0 auto 2rem',
-        }}>
-          India's most intense Free Fire tournament platform.
-          <span style={{ color: 'var(--cyan)' }}> Compete. Dominate. Clutch.</span>
+        <p style={{ fontSize: '1.05rem', color: 'var(--text-2)', lineHeight: 1.7, marginBottom: '2rem', maxWidth: 420, margin: '0 auto 2rem' }}>
+          India's premier Free Fire tournament platform. Find tournaments, build your squad, and rise through the ranks.
         </p>
 
-        {/* CTAs */}
-        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap', marginBottom: '3rem' }}>
-          <button onClick={() => router.push(isAuthenticated ? '/tournaments' : '/auth')} style={{
-            background: 'linear-gradient(135deg, var(--orange), #cc4400)',
-            color: '#fff', border: 'none', padding: '0.9rem 2rem',
-            fontFamily: 'var(--font-display)', fontSize: '0.85rem', fontWeight: 700,
-            letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer',
-            borderRadius: '4px', clipPath: 'polygon(10px 0%, 100% 0%, calc(100% - 10px) 100%, 0% 100%)',
-            boxShadow: '0 0 30px var(--orange-glow)',
-            transition: 'all 0.3s',
-          }}>
-            {isAuthenticated ? 'ENTER ARENA →' : 'JOIN FREE →'}
+        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+          <button
+            className="btn btn-primary btn-lg"
+            onClick={() => router.push(isAuthenticated ? '/tournaments' : '/auth')}
+          >
+            {isAuthenticated ? 'Browse Tournaments' : 'Get Started Free'}
+            <ArrowRight size={18} />
           </button>
-          <button onClick={() => router.push('/tournaments')} style={{
-            background: 'transparent', color: 'var(--cyan)',
-            border: '1px solid var(--cyan)', padding: '0.9rem 2rem',
-            fontFamily: 'var(--font-display)', fontSize: '0.85rem', fontWeight: 700,
-            letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer',
-            borderRadius: '4px', clipPath: 'polygon(10px 0%, 100% 0%, calc(100% - 10px) 100%, 0% 100%)',
-            boxShadow: '0 0 15px rgba(0,245,255,0.15)',
-            transition: 'all 0.3s',
-          }}>
-            VIEW BATTLES
+          <button className="btn btn-ghost btn-lg" onClick={() => router.push('/tournaments')}>
+            View Live Matches
           </button>
         </div>
+      </section>
 
-        {/* Stats */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginBottom: '3rem' }}>
-          {stats.map((s, i) => (
-            <div key={i} style={{
-              background: 'var(--surface)', border: '1px solid var(--border)',
-              borderRadius: '8px', padding: '1rem 0.5rem',
-              position: 'relative', overflow: 'hidden',
-              animation: mounted ? `pageEnter 0.4s ease ${0.2 + i * 0.1}s both` : 'none',
-            }}>
-              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '2px', background: s.color, boxShadow: `0 0 8px ${s.color}` }} />
-              <div style={{
-                fontFamily: 'var(--font-display)', fontSize: '1.3rem', fontWeight: 900,
-                color: s.color, textShadow: `0 0 15px ${s.color}`,
-              }}>{s.value}</div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.5rem', color: 'var(--text-dim)', letterSpacing: '0.1em', marginTop: '2px' }}>{s.label}</div>
+      {/* ── Stats ── */}
+      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginBottom: '3rem', maxWidth: 640, margin: '0 auto 3rem' }}>
+        {[
+          { label: 'Total Tournaments', value: stats.total || '—' },
+          { label: 'Live Now',           value: stats.live  || '—' },
+          { label: 'Active Players',     value: '12K+' },
+        ].map((s, i) => (
+          <div key={i} className="stat-card" style={{ textAlign: 'center', animation: `fadeUp 0.3s ease ${0.1 + i * 0.08}s both` }}>
+            <div className="stat-number">{s.value}</div>
+            <div className="stat-label">{s.label}</div>
+          </div>
+        ))}
+      </section>
+
+      {/* ── Features ── */}
+      <section style={{ maxWidth: 860, margin: '0 auto 3rem' }}>
+        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.02em' }}>
+            Everything you need to compete
+          </h2>
+          <p style={{ color: 'var(--text-2)', marginTop: '0.5rem', fontSize: '0.9rem' }}>
+            Built for Free Fire players and organizers.
+          </p>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }} className="stagger">
+          {features.map(({ icon: Icon, title, desc }) => (
+            <div key={title} className="card" style={{ padding: '1.5rem' }}>
+              <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--red-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1rem' }}>
+                <Icon size={20} color="var(--red)" />
+              </div>
+              <div style={{ fontWeight: 700, marginBottom: '0.4rem', fontSize: '0.95rem' }}>{title}</div>
+              <div style={{ fontSize: '0.825rem', color: 'var(--text-2)', lineHeight: 1.6 }}>{desc}</div>
             </div>
           ))}
         </div>
+      </section>
 
-        {/* Features */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem' }}>
-          {features.map((f, i) => (
-            <div key={i} style={{
-              background: 'var(--surface)', border: '1px solid var(--border)',
-              borderRadius: '8px', padding: '1.25rem 1rem',
-              textAlign: 'left', position: 'relative', overflow: 'hidden',
-              transition: 'all 0.3s',
-              animation: mounted ? `pageEnter 0.4s ease ${0.4 + i * 0.1}s both` : 'none',
-            }}
-              onMouseEnter={e => {
-                (e.currentTarget as HTMLElement).style.borderColor = 'var(--orange)';
-                (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)';
-              }}
-              onMouseLeave={e => {
-                (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)';
-                (e.currentTarget as HTMLElement).style.transform = 'translateY(0)';
-              }}
-            >
-              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '1px', background: 'linear-gradient(90deg, transparent, var(--orange), transparent)', opacity: 0.5 }} />
-              <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>{f.icon}</div>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: '0.7rem', fontWeight: 700, color: 'var(--orange)', letterSpacing: '0.1em', marginBottom: '0.25rem' }}>{f.title}</div>
-              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-dim)' }}>{f.desc}</div>
-            </div>
-          ))}
+      {/* ── CTA Banner ── */}
+      <section style={{ maxWidth: 860, margin: '0 auto' }}>
+        <div className="card" style={{ padding: '2.5rem 2rem', textAlign: 'center', background: 'linear-gradient(135deg, rgba(251,54,64,0.08) 0%, rgba(0,15,8,0) 100%)', borderColor: 'var(--border-hi)' }}>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.75rem', letterSpacing: '-0.02em' }}>
+            Ready to prove yourself?
+          </h2>
+          <p style={{ color: 'var(--text-2)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
+            Join thousands of Free Fire players competing every day.
+          </p>
+          <button
+            className="btn btn-primary"
+            onClick={() => router.push(isAuthenticated ? '/tournaments' : '/auth')}
+          >
+            {isAuthenticated ? 'Find a Tournament' : 'Create Free Account'}
+            <ChevronRight size={16} />
+          </button>
         </div>
-      </div>
+      </section>
     </div>
   );
 }
