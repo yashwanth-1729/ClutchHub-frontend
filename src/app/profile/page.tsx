@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import { supabase } from '@/lib/supabase';
 import axios from 'axios';
+import { userApi } from '@/lib/api';
 
 const API = process.env.NEXT_PUBLIC_API_URL;
 
@@ -19,6 +20,7 @@ export default function ProfilePage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [profile, setProfile] = useState<any>(null);
+  const [achievements, setAchievements] = useState<any[]>([]);
   const [form, setForm] = useState({
     username: '', gameUid: '', gender: '', gameRole: '', bio: '',
   });
@@ -27,7 +29,15 @@ export default function ProfilePage() {
     setMounted(true);
     if (!isAuthenticated) { router.push('/auth'); return; }
     loadProfile();
+    loadAchievements();
   }, [isAuthenticated]);
+
+  const loadAchievements = async () => {
+    try {
+      const res = await userApi.achievements();
+      setAchievements(res.data?.data || []);
+    } catch {}
+  };
 
   const loadProfile = async () => {
     try {
@@ -84,7 +94,7 @@ export default function ProfilePage() {
     <div style={{ minHeight: '100vh', paddingBottom: '100px', animation: mounted ? 'pageEnter 0.4s ease forwards' : 'none' }}>
       {/* Header */}
       <div style={{ background: 'rgba(3,3,8,0.95)', backdropFilter: 'blur(20px)', borderBottom: '1px solid var(--border)', padding: '1rem', position: 'sticky', top: 0, zIndex: 40 }}>
-        <div style={{ maxWidth: '480px', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ maxWidth: 'var(--content-max)', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', fontWeight: 900, color: 'var(--orange)', letterSpacing: '0.1em', textShadow: '0 0 15px var(--orange-glow)' }}>PROFILE</h1>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.6rem', color: 'var(--text-dim)', letterSpacing: '0.2em' }}>YOUR ACCOUNT</div>
@@ -108,7 +118,7 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      <div style={{ maxWidth: '480px', margin: '0 auto', padding: '1.5rem 1rem' }}>
+      <div style={{ maxWidth: 'var(--content-max)', margin: '0 auto', padding: '1.5rem 1rem' }}>
         {/* Avatar */}
         <div style={{
           background: 'var(--surface)', border: '1px solid var(--border)',
@@ -249,6 +259,46 @@ export default function ProfilePage() {
                 <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.95rem', color: 'var(--text)', fontWeight: 500 }}>{item.value}</span>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Achievements section */}
+        {!editing && achievements.length > 0 && (
+          <div style={{ marginBottom: '1rem' }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text-dim)', letterSpacing: '0.2em', marginBottom: '0.75rem' }}>// BATTLE HISTORY</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {achievements.map((a: any, i: number) => {
+                const rankLabel = a.rank === 1 ? '🥇' : a.rank === 2 ? '🥈' : a.rank === 3 ? '🥉' : a.rank ? `#${a.rank}` : '–';
+                const statusColor = a.tournamentStatus === 'ONGOING' || a.tournamentStatus === 'LIVE' ? 'var(--red)' : a.tournamentStatus === 'COMPLETED' ? 'var(--text-dim)' : 'var(--cyan)';
+                return (
+                  <div key={i} style={{ background: 'var(--surface)', border: `1px solid ${a.certificate ? 'rgba(245,200,66,0.3)' : 'var(--border)'}`, borderRadius: '8px', padding: '1rem', position: 'relative', overflow: 'hidden' }}>
+                    {a.certificate && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px', background: 'linear-gradient(90deg, transparent, var(--gold), transparent)' }} />}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontFamily: 'var(--font-display)', fontSize: '0.9rem', fontWeight: 700, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.tournamentName}</div>
+                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.6rem', color: statusColor, letterSpacing: '0.1em', marginTop: '2px' }}>{a.tournamentStatus} · {a.format}</div>
+                      </div>
+                      <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', fontWeight: 900, color: a.rank && a.rank <= 3 ? 'var(--gold)' : 'var(--text-dim)', textShadow: a.rank && a.rank <= 3 ? '0 0 10px var(--gold)' : 'none', marginLeft: '0.75rem', flexShrink: 0 }}>{rankLabel}</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.55rem', color: 'var(--text-dim)', letterSpacing: '0.1em' }}>TEAM</div>
+                        <div style={{ fontFamily: 'var(--font-display)', fontSize: '0.75rem', color: 'var(--text)', fontWeight: 600 }}>{a.teamName}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.55rem', color: 'var(--text-dim)', letterSpacing: '0.1em' }}>POINTS</div>
+                        <div style={{ fontFamily: 'var(--font-display)', fontSize: '0.75rem', color: 'var(--orange)', fontWeight: 600 }}>{a.teamPoints || 0}</div>
+                      </div>
+                      {a.certificate && (
+                        <a href={a.certificate.pdfUrl} target="_blank" rel="noopener noreferrer" style={{ marginLeft: 'auto', padding: '0.3rem 0.75rem', background: 'rgba(245,200,66,0.1)', border: '1px solid var(--gold)', color: 'var(--gold)', fontFamily: 'var(--font-mono)', fontSize: '0.6rem', letterSpacing: '0.1em', borderRadius: '4px', textDecoration: 'none', cursor: 'pointer', flexShrink: 0 }}>
+                          ↓ CERT
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 

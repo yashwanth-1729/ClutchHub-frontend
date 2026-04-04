@@ -85,7 +85,7 @@ export default function SearchPage() {
       <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', paddingBottom: '80px', animation: mounted ? 'pageEnter 0.4s ease forwards' : 'none' }}>
         {/* Chat header */}
         <div style={{ background: 'rgba(3,3,8,0.95)', backdropFilter: 'blur(20px)', borderBottom: '1px solid var(--border)', padding: '1rem', position: 'sticky', top: 0, zIndex: 40 }}>
-          <div style={{ maxWidth: '480px', margin: '0 auto', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <div style={{ maxWidth: 'var(--content-max)', margin: '0 auto', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <button onClick={() => setSelectedUser(null)} style={{ background: 'transparent', border: '1px solid var(--border2)', color: 'var(--text-dim)', width: '32px', height: '32px', borderRadius: '4px', cursor: 'pointer', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>‹</button>
             <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--orange), var(--gold))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', fontWeight: 700, flexShrink: 0 }}>
               {selectedUser.displayName?.[0]?.toUpperCase() || '?'}
@@ -98,7 +98,7 @@ export default function SearchPage() {
         </div>
 
         {/* Messages */}
-        <div style={{ flex: 1, maxWidth: '480px', width: '100%', margin: '0 auto', padding: '1rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+        <div style={{ flex: 1, maxWidth: 'var(--content-max)', width: '100%', margin: '0 auto', padding: '1rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
           {messages.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', letterSpacing: '0.2em' }}>
               NO MESSAGES YET<br />
@@ -130,7 +130,7 @@ export default function SearchPage() {
 
         {/* Input */}
         <div style={{ background: 'rgba(3,3,8,0.97)', backdropFilter: 'blur(20px)', borderTop: '1px solid var(--border)', padding: '0.75rem 1rem', position: 'sticky', bottom: '80px' }}>
-          <div style={{ maxWidth: '480px', margin: '0 auto', display: 'flex', gap: '0.5rem' }}>
+          <div style={{ maxWidth: 'var(--content-max)', margin: '0 auto', display: 'flex', gap: '0.5rem' }}>
             <input
               value={newMsg}
               onChange={e => setNewMsg(e.target.value)}
@@ -159,13 +159,13 @@ export default function SearchPage() {
     <div style={{ minHeight: '100vh', paddingBottom: '80px', animation: mounted ? 'pageEnter 0.4s ease forwards' : 'none' }}>
       {/* Header */}
       <div style={{ background: 'rgba(3,3,8,0.95)', backdropFilter: 'blur(20px)', borderBottom: '1px solid var(--border)', padding: '1rem', position: 'sticky', top: 0, zIndex: 40 }}>
-        <div style={{ maxWidth: '480px', margin: '0 auto' }}>
+        <div style={{ maxWidth: 'var(--content-max)', margin: '0 auto' }}>
           <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', fontWeight: 900, color: 'var(--orange)', letterSpacing: '0.1em', textShadow: '0 0 15px var(--orange-glow)' }}>COMMS</h1>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.6rem', color: 'var(--text-dim)', letterSpacing: '0.2em' }}>SEARCH & MESSAGES</div>
         </div>
       </div>
 
-      <div style={{ maxWidth: '480px', margin: '0 auto', padding: '1rem' }}>
+      <div style={{ maxWidth: 'var(--content-max)', margin: '0 auto', padding: '1rem' }}>
         {/* Tabs */}
         <div style={{ display: 'flex', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '6px', padding: '3px', marginBottom: '1.25rem' }}>
           {(['search', 'chats'] as const).map(t => (

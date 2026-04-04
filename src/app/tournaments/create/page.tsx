@@ -7,7 +7,7 @@ const API = process.env.NEXT_PUBLIC_API_URL;
 
 export default function CreateTournamentPage() {
   const router = useRouter();
-  const { isAuthenticated, accessToken } = useAuthStore();
+  const { isAuthenticated, accessToken, user } = useAuthStore();
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -18,6 +18,8 @@ export default function CreateTournamentPage() {
     format: 'SQUAD', maxTeams: 20, entryFee: 0,
     prizePool: 0, scheduledAt: '', rules: '',
   });
+
+  const canCreate = user?.role === 'ORGANIZER' || user?.role === 'SUPER_ADMIN';
 
   useEffect(() => {
     setMounted(true);
@@ -75,6 +77,19 @@ export default function CreateTournamentPage() {
     display: 'block', marginBottom: '0.4rem',
   };
 
+  if (mounted && isAuthenticated && !canCreate) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '1rem', padding: '2rem' }}>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: '3rem', opacity: 0.2 }}>◈</div>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', fontWeight: 800, color: 'var(--red)', letterSpacing: '0.1em' }}>ACCESS DENIED</div>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: 'var(--text-dim)', letterSpacing: '0.1em', textAlign: 'center', maxWidth: '280px' }}>
+          Only Organizers can create tournaments. Contact support to upgrade your account.
+        </div>
+        <button onClick={() => router.push('/tournaments')} style={{ marginTop: '0.5rem', background: 'transparent', border: '1px solid var(--orange)', color: 'var(--orange)', padding: '0.5rem 1.5rem', fontFamily: 'var(--font-mono)', fontSize: '0.7rem', cursor: 'pointer', borderRadius: '4px', letterSpacing: '0.1em' }}>← BACK TO ARENA</button>
+      </div>
+    );
+  }
+
   return (
     <div style={{ minHeight: '100vh', paddingBottom: '80px', animation: mounted ? 'pageEnter 0.4s ease forwards' : 'none' }}>
       {/* Header */}
@@ -83,7 +98,7 @@ export default function CreateTournamentPage() {
         borderBottom: '1px solid var(--border)', padding: '1rem',
         position: 'sticky', top: 0, zIndex: 40,
       }}>
-        <div style={{ maxWidth: '480px', margin: '0 auto', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        <div style={{ maxWidth: 'var(--content-max)', margin: '0 auto', display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <button onClick={() => router.back()} style={{
             background: 'transparent', border: '1px solid var(--border2)',
             color: 'var(--text-dim)', width: '32px', height: '32px',
@@ -97,7 +112,7 @@ export default function CreateTournamentPage() {
         </div>
       </div>
 
-      <div style={{ maxWidth: '480px', margin: '0 auto', padding: '1.5rem 1rem' }}>
+      <div style={{ maxWidth: 'var(--content-max)', margin: '0 auto', padding: '1.5rem 1rem' }}>
         {/* Step indicator */}
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '2rem' }}>
           {[1, 2, 3].map(s => (

@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
+import { tournamentApi } from '@/lib/api';
 
 function GlitchText({ text, size = '3rem' }: { text: string; size?: string }) {
   return (
@@ -41,19 +42,19 @@ export default function HomePage() {
   const router = useRouter();
   const { isAuthenticated } = useAuthStore();
   const [mounted, setMounted] = useState(false);
-  const [counter, setCounter] = useState(0);
+  const [totalTournaments, setTotalTournaments] = useState<number | null>(null);
+  const [activeTournaments, setActiveTournaments] = useState<number | null>(null);
 
   useEffect(() => {
     setMounted(true);
-    const interval = setInterval(() => setCounter(c => c + 1), 50);
-    const timeout = setTimeout(() => clearInterval(interval), 2000);
-    return () => { clearInterval(interval); clearTimeout(timeout); };
+    tournamentApi.list(0, 1).then(r => setTotalTournaments(r.data?.data?.totalElements ?? null)).catch(() => {});
+    tournamentApi.list(0, 1, 'ONGOING').then(r => setActiveTournaments(r.data?.data?.totalElements ?? null)).catch(() => {});
   }, []);
 
   const stats = [
     { label: 'ACTIVE PLAYERS', value: '12K+', color: 'var(--orange)' },
-    { label: 'TOURNAMENTS', value: '500+', color: 'var(--cyan)' },
-    { label: 'PRIZE GIVEN', value: '₹2L+', color: 'var(--gold)' },
+    { label: 'TOURNAMENTS', value: totalTournaments !== null ? `${totalTournaments}` : '...', color: 'var(--cyan)' },
+    { label: 'LIVE NOW', value: activeTournaments !== null ? `${activeTournaments}` : '...', color: 'var(--gold)' },
   ];
 
   const features = [
@@ -70,7 +71,7 @@ export default function HomePage() {
       {/* Hero */}
       <div style={{
         position: 'relative', zIndex: 10, padding: '4rem 1.5rem 2rem',
-        textAlign: 'center', maxWidth: '480px', margin: '0 auto',
+        textAlign: 'center', maxWidth: 'var(--content-max)', margin: '0 auto',
         animation: mounted ? 'pageEnter 0.6s ease forwards' : 'none',
       }}>
         {/* Badge */}

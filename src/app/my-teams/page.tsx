@@ -48,7 +48,7 @@ export default function MyTeamsPage() {
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.6rem', color: statusColors[t.status] || 'var(--text-dim)', letterSpacing: '0.1em' }}>
             {t.status === 'LIVE' || t.status === 'ONGOING' ? '● LIVE' : t.status === 'UPCOMING' ? '◈ UPCOMING' : '◉ ENDED'}
           </span>
-          <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '0.95rem', fontWeight: 700, color: 'var(--text)', marginTop: '2px', letterSpacing: '0.05em' }}>{t.title}</h3>
+          <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '0.95rem', fontWeight: 700, color: 'var(--text)', marginTop: '2px', letterSpacing: '0.05em' }}>{t.name}</h3>
         </div>
         <div style={{ textAlign: 'right' }}>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', fontWeight: 800, background: 'linear-gradient(135deg, var(--gold), var(--orange))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
@@ -87,13 +87,13 @@ export default function MyTeamsPage() {
     <div style={{ minHeight: '100vh', paddingBottom: '80px', animation: mounted ? 'pageEnter 0.4s ease forwards' : 'none' }}>
       {/* Header */}
       <div style={{ background: 'rgba(3,3,8,0.95)', backdropFilter: 'blur(20px)', borderBottom: '1px solid var(--border)', padding: '1rem', position: 'sticky', top: 0, zIndex: 40 }}>
-        <div style={{ maxWidth: '480px', margin: '0 auto' }}>
+        <div style={{ maxWidth: 'var(--content-max)', margin: '0 auto' }}>
           <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', fontWeight: 900, color: 'var(--orange)', letterSpacing: '0.1em', textShadow: '0 0 15px var(--orange-glow)' }}>MY BATTLES</h1>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.6rem', color: 'var(--text-dim)', letterSpacing: '0.2em' }}>SQUAD DASHBOARD</div>
         </div>
       </div>
 
-      <div style={{ maxWidth: '480px', margin: '0 auto', padding: '1rem' }}>
+      <div style={{ maxWidth: 'var(--content-max)', margin: '0 auto', padding: '1rem' }}>
         {/* Stats */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1.25rem' }}>
           {[

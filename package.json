@@ -1,5 +1,9 @@
 {
   "dependencies": {
+    "@capacitor/android": "^8.3.0",
+    "@capacitor/cli": "^8.3.0",
+    "@capacitor/core": "^8.3.0",
+    "@capacitor/ios": "^8.3.0",
     "@stomp/stompjs": "^7.3.0",
     "@supabase/supabase-js": "^2.99.0",
     "@tailwindcss/postcss": "^4.2.1",
@@ -22,7 +26,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "build:mobile": "next build --config next.config.mobile.mjs",
+    "cap:sync": "npm run build:mobile && node node_modules/@capacitor/cli/bin/capacitor sync",
+    "cap:android": "node node_modules/@capacitor/cli/bin/capacitor open android",
+    "cap:ios": "node node_modules/@capacitor/cli/bin/capacitor open ios"
   },
   "tsconfig": {
     "compilerOptions": {

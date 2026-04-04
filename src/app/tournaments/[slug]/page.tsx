@@ -3,8 +3,12 @@ import { useQuery } from '@tanstack/react-query';
 import { tournamentApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { Tournament, ApiResponse, LeaderboardEntry } from '@/types';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { Client } from '@stomp/stompjs';
+import SockJS from 'sockjs-client';
+
+const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://66.85.185.109:8080/ws';
 
 export default function TournamentDetailPage({ params }: { params: { slug: string } }) {
   const { slug } = params;
@@ -14,6 +18,10 @@ export default function TournamentDetailPage({ params }: { params: { slug: strin
   const [activeTab, setActiveTab] = useState<'info' | 'leaderboard' | 'rules'>('info');
   const [joining, setJoining] = useState(false);
   const [joinMsg, setJoinMsg] = useState('');
+  const [showJoinModal, setShowJoinModal] = useState(false);
+  const [teamName, setTeamName] = useState('');
+  const [roomCredentials, setRoomCredentials] = useState<{ roomId: string; roomPassword: string } | null>(null);
+  const credStompRef = useRef<Client | null>(null);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -38,19 +46,53 @@ export default function TournamentDetailPage({ params }: { params: { slug: strin
   const tournament = data?.data;
   const entries = lbData?.data || [];
 
+  // Subscribe to room credentials WebSocket when tournament is loaded
+  useEffect(() => {
+    if (!tournament?.id) return;
+    const client = new Client({
+      webSocketFactory: () => new SockJS(`${WS_URL}/ws-clutchhub`),
+      onConnect: () => {
+        client.subscribe(`/topic/tournament/${tournament.id}/credentials`, (msg) => {
+          try { setRoomCredentials(JSON.parse(msg.body)); } catch {}
+        });
+      },
+      reconnectDelay: 3000,
+    });
+    client.activate();
+    credStompRef.current = client;
+    return () => { client.deactivate(); };
+  }, [tournament?.id]);
+
+  // Pre-populate credentials from tournament data if already pushed
+  useEffect(() => {
+    if (tournament?.roomId && tournament?.roomPassword) {
+      setRoomCredentials({ roomId: tournament.roomId, roomPassword: tournament.roomPassword });
+    }
+  }, [tournament?.roomId, tournament?.roomPassword]);
+
   const statusColors: Record<string, string> = {
     UPCOMING: 'var(--cyan)', LIVE: 'var(--red)', COMPLETED: 'var(--text-dim)',
   };
 
-  const handleJoin = async () => {
+  const openJoinModal = () => {
     if (!isAuthenticated) { router.push('/auth'); return; }
+    if (tournament?.format === 'SOLO') {
+      handleJoin(`${user?.displayName}'s Team`);
+    } else {
+      setTeamName(`${user?.displayName || ''}'s Team`);
+      setShowJoinModal(true);
+    }
+  };
+
+  const handleJoin = async (name: string) => {
+    setShowJoinModal(false);
     setJoining(true);
     setJoinMsg('');
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/teams`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
-        body: JSON.stringify({ tournamentId: tournament?.id, name: `${user?.displayName}'s Team` }),
+        body: JSON.stringify({ tournamentId: tournament?.id, name: name.trim() || `${user?.displayName}'s Team` }),
       });
       const json = await res.json();
       if (res.ok) setJoinMsg('✓ Successfully registered!');
@@ -81,10 +123,10 @@ export default function TournamentDetailPage({ params }: { params: { slug: strin
     <div style={{ minHeight: '100vh', paddingBottom: '80px', animation: mounted ? 'pageEnter 0.4s ease forwards' : 'none' }}>
       {/* Header */}
       <div style={{ background: 'rgba(3,3,8,0.95)', backdropFilter: 'blur(20px)', borderBottom: '1px solid var(--border)', padding: '1rem', position: 'sticky', top: 0, zIndex: 40 }}>
-        <div style={{ maxWidth: '480px', margin: '0 auto', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <div style={{ maxWidth: 'var(--content-max)', margin: '0 auto', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           <button onClick={() => router.push('/tournaments')} style={{ background: 'transparent', border: '1px solid var(--border2)', color: 'var(--text-dim)', width: '32px', height: '32px', borderRadius: '4px', cursor: 'pointer', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>‹</button>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '0.95rem', fontWeight: 800, color: 'var(--orange)', letterSpacing: '0.05em', textShadow: '0 0 10px var(--orange-glow)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tournament.title}</h1>
+            <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '0.95rem', fontWeight: 800, color: 'var(--orange)', letterSpacing: '0.05em', textShadow: '0 0 10px var(--orange-glow)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tournament.name}</h1>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '2px' }}>
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.6rem', color: statusColors[(tournament.status as string)] || 'var(--text-dim)', animation: (tournament.status as string) === 'LIVE' ? 'livePulse 1.5s infinite' : 'none' }}>
                 {(tournament.status as string) === 'LIVE' ? '● LIVE' : (tournament.status as string) === 'UPCOMING' ? '◈ UPCOMING' : '◉ ENDED'}
@@ -95,7 +137,7 @@ export default function TournamentDetailPage({ params }: { params: { slug: strin
         </div>
       </div>
 
-      <div style={{ maxWidth: '480px', margin: '0 auto', padding: '1rem' }}>
+      <div style={{ maxWidth: 'var(--content-max)', margin: '0 auto', padding: '1rem' }}>
         {/* Prize/Stats banner */}
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', padding: '1.25rem', marginBottom: '1rem', position: 'relative', overflow: 'hidden' }}>
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px', background: 'linear-gradient(90deg, var(--orange), var(--gold), var(--orange))', backgroundSize: '200% 100%', animation: 'navLine 2s linear infinite' }} />
@@ -145,7 +187,7 @@ export default function TournamentDetailPage({ params }: { params: { slug: strin
         {/* Join button */}
         {(tournament.status as string) === 'UPCOMING' && (
           <div style={{ marginBottom: '1rem' }}>
-            <button onClick={handleJoin} disabled={joining} style={{
+            <button onClick={openJoinModal} disabled={joining} style={{
               width: '100%', padding: '0.9rem',
               background: joining ? 'rgba(255,107,43,0.3)' : 'linear-gradient(135deg, var(--orange), #cc4400)',
               color: '#fff', border: 'none', cursor: joining ? 'not-allowed' : 'pointer',
@@ -163,6 +205,33 @@ export default function TournamentDetailPage({ params }: { params: { slug: strin
               </div>
             )}
           </div>
+        )}
+
+        {/* Room Credentials (shown when credentials have been pushed) */}
+        {roomCredentials && (
+          <div style={{ marginBottom: '1rem', background: 'rgba(0,245,255,0.05)', border: '1px solid var(--cyan)', borderRadius: '8px', padding: '1.25rem', position: 'relative', overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px', background: 'linear-gradient(90deg, transparent, var(--cyan), transparent)' }} />
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--cyan)', letterSpacing: '0.2em', marginBottom: '0.75rem' }}>// ROOM DETAILS</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.55rem', color: 'var(--text-dim)', letterSpacing: '0.1em', marginBottom: '0.25rem' }}>ROOM ID</div>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', fontWeight: 800, color: 'var(--cyan)', textShadow: '0 0 10px var(--cyan-glow)' }}>{roomCredentials.roomId}</div>
+              </div>
+              <div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.55rem', color: 'var(--text-dim)', letterSpacing: '0.1em', marginBottom: '0.25rem' }}>PASSWORD</div>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', fontWeight: 800, color: 'var(--orange)', textShadow: '0 0 10px var(--orange-glow)' }}>{roomCredentials.roomPassword}</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Host Panel button (organizer + org_host only) */}
+        {(user?.role === 'ORGANIZER' || user?.role === 'ORG_HOST' || user?.role === 'SUPER_ADMIN') && (
+          <button onClick={() => router.push(`/tournaments/${slug}/host`)} style={{ width: '100%', padding: '0.75rem', marginBottom: '1rem', background: 'transparent', border: '1px solid var(--orange)', color: 'var(--orange)', fontFamily: 'var(--font-display)', fontSize: '0.8rem', fontWeight: 700, letterSpacing: '0.1em', cursor: 'pointer', borderRadius: '4px', transition: 'all 0.3s' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,107,43,0.1)'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
+            ⚙ HOST PANEL
+          </button>
         )}
 
         {/* Tabs */}
@@ -247,6 +316,33 @@ export default function TournamentDetailPage({ params }: { params: { slug: strin
           </div>
         )}
       </div>
+
+      {/* Join Modal */}
+      {showJoinModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '1rem' }}>
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--orange)', borderRadius: '8px', padding: '1.5rem', width: '100%', maxWidth: '360px', position: 'relative' }}>
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px', background: 'linear-gradient(90deg, transparent, var(--orange), transparent)' }} />
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: '0.9rem', fontWeight: 800, color: 'var(--orange)', letterSpacing: '0.1em', marginBottom: '0.25rem' }}>REGISTER TEAM</div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.6rem', color: 'var(--text-dim)', letterSpacing: '0.15em', marginBottom: '1.25rem' }}>ENTER YOUR TEAM NAME</div>
+            <input
+              type="text"
+              value={teamName}
+              onChange={e => setTeamName(e.target.value)}
+              maxLength={32}
+              placeholder="Team name..."
+              style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '4px', padding: '0.75rem', color: 'var(--text)', fontFamily: 'var(--font-body)', fontSize: '0.95rem', outline: 'none', boxSizing: 'border-box', marginBottom: '1rem' }}
+              onFocus={e => e.currentTarget.style.borderColor = 'var(--orange)'}
+              onBlur={e => e.currentTarget.style.borderColor = 'var(--border)'}
+              onKeyDown={e => { if (e.key === 'Enter' && teamName.trim()) handleJoin(teamName); }}
+              autoFocus
+            />
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button onClick={() => setShowJoinModal(false)} style={{ flex: 1, padding: '0.7rem', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-dim)', fontFamily: 'var(--font-display)', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.1em', cursor: 'pointer', borderRadius: '4px' }}>CANCEL</button>
+              <button onClick={() => { if (teamName.trim()) handleJoin(teamName); }} disabled={!teamName.trim()} style={{ flex: 2, padding: '0.7rem', background: teamName.trim() ? 'linear-gradient(135deg, var(--orange), #cc4400)' : 'rgba(255,107,43,0.2)', border: 'none', color: '#fff', fontFamily: 'var(--font-display)', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.1em', cursor: teamName.trim() ? 'pointer' : 'not-allowed', borderRadius: '4px', boxShadow: teamName.trim() ? '0 0 15px var(--orange-glow)' : 'none' }}>⚡ CONFIRM JOIN</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

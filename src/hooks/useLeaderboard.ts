@@ -4,7 +4,7 @@ import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 import { LeaderboardEntry } from '@/types';
 
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'http://66.85.185.109/ws';
+const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://66.85.185.109:8080/ws';
 
 export function useLeaderboard(tournamentId: string) {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);

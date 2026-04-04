@@ -26,7 +26,7 @@ export interface AuthResponse {
 
 export interface Tournament {
   id: string;
-  title: string;
+  name: string;
   slug: string;
   description?: string;
   game: string;

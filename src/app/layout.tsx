@@ -14,7 +14,6 @@ export const viewport: Viewport = {
   themeColor: '#030308',
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -22,8 +21,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body>
         <Providers>
-          {children}
           <BottomNav />
+          <main className="main-content">
+            {children}
+          </main>
         </Providers>
       </body>
     </html>

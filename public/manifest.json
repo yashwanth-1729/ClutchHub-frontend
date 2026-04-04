@@ -1,14 +1,43 @@
 {
-  "name": "ClutchHub",
+  "name": "ClutchHub — Free Fire Tournaments",
   "short_name": "ClutchHub",
-  "description": "Free Fire Tournament Platform",
+  "description": "India's most intense Free Fire tournament platform. Compete. Dominate. Clutch.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#0a0a0f",
-  "theme_color": "#0a0a0f",
-  "orientation": "portrait",
+  "background_color": "#030308",
+  "theme_color": "#ff6b2b",
+  "orientation": "portrait-primary",
+  "categories": ["games", "sports"],
+  "lang": "en-IN",
   "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Tournaments",
+      "short_name": "Arena",
+      "description": "Browse live tournaments",
+      "url": "/tournaments",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "My Battles",
+      "short_name": "Squad",
+      "description": "My joined and created tournaments",
+      "url": "/my-teams",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
   ]
 }

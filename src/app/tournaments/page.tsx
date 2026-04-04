@@ -77,7 +77,7 @@ function TournamentCard({ t, onClick }: { t: any; onClick: () => void }) {
             fontFamily: 'var(--font-display)', fontSize: '1rem', fontWeight: 700,
             color: hovered ? 'var(--orange)' : 'var(--text)',
             transition: 'color 0.3s', letterSpacing: '0.05em',
-          }}>{t.title}</h3>
+          }}>{t.name}</h3>
         </div>
         <div style={{ textAlign: 'right' }}>
           <div style={{
@@ -117,21 +117,33 @@ export default function TournamentsPage() {
   const router = useRouter();
   const { isAuthenticated } = useAuthStore();
   const [tournaments, setTournaments] = useState<any[]>([]);
+  const [allStats, setAllStats] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('ALL');
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => { setMounted(true); }, []);
 
+  // Fetch all for stats once
   useEffect(() => {
-    axios.get(`${API}/tournaments`).then(r => {
-      setTournaments(r.data?.data?.content || []);
-      setLoading(false);
-    }).catch(() => setLoading(false));
+    axios.get(`${API}/tournaments?size=100`).then(r => {
+      setAllStats(r.data?.data?.content || []);
+    }).catch(() => {});
   }, []);
 
+  // Fetch filtered list whenever filter changes
+  useEffect(() => {
+    setLoading(true);
+    const url = filter === 'ALL'
+      ? `${API}/tournaments?size=50`
+      : `${API}/tournaments?size=50&status=${filter}`;
+    axios.get(url).then(r => {
+      setTournaments(r.data?.data?.content || []);
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, [filter]);
+
   const filters = ['ALL', 'UPCOMING', 'LIVE', 'COMPLETED'];
-  const filtered = filter === 'ALL' ? tournaments : tournaments.filter(t => t.status === filter);
+  const filtered = tournaments;
 
   return (
     <div style={{
@@ -144,7 +156,7 @@ export default function TournamentsPage() {
         borderBottom: '1px solid var(--border)', padding: '1rem',
         position: 'sticky', top: 0, zIndex: 40,
       }}>
-        <div style={{ maxWidth: '480px', margin: '0 auto' }}>
+        <div style={{ maxWidth: 'var(--content-max)', margin: '0 auto' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <h1 style={{
@@ -176,16 +188,16 @@ export default function TournamentsPage() {
         </div>
       </div>
 
-      <div style={{ maxWidth: '480px', margin: '0 auto', padding: '1rem' }}>
+      <div style={{ maxWidth: 'var(--content-max)', margin: '0 auto', padding: '1rem' }}>
         {/* Stats bar */}
         <div style={{
           display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)',
           gap: '0.5rem', marginBottom: '1.5rem',
         }}>
           {[
-            { label: 'ACTIVE', value: tournaments.filter(t => t.status === 'LIVE').length, color: 'var(--red)' },
-            { label: 'UPCOMING', value: tournaments.filter(t => t.status === 'UPCOMING').length, color: 'var(--cyan)' },
-            { label: 'TOTAL', value: tournaments.length, color: 'var(--orange)' },
+            { label: 'ACTIVE', value: allStats.filter(t => t.status === 'LIVE' || t.status === 'ONGOING').length, color: 'var(--red)' },
+            { label: 'UPCOMING', value: allStats.filter(t => t.status === 'UPCOMING' || t.status === 'OPEN').length, color: 'var(--cyan)' },
+            { label: 'TOTAL', value: allStats.length, color: 'var(--orange)' },
           ].map((s, i) => (
             <div key={i} style={{
               background: 'var(--surface)', border: '1px solid var(--border)',
@@ -234,7 +246,7 @@ export default function TournamentsPage() {
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--border2)', marginTop: '0.5rem' }}>Check back later for upcoming battles</div>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <div className="tournament-grid">
             {filtered.map((t, i) => (
               <div key={t.id} style={{ animation: `pageEnter 0.4s ease ${i * 0.05}s both` }}>
                 <TournamentCard t={t} onClick={() => router.push(`/tournaments/${t.slug}`)} />

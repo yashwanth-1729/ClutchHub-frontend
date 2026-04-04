@@ -19,7 +19,7 @@ export function TournamentCard({ t }: { t: Tournament }) {
         {/* Banner */}
         <div className="h-32 bg-gradient-to-br from-[#1a1a25] to-[#0d0d15] relative flex items-center justify-center">
           {t.bannerUrl ? (
-            <img src={t.bannerUrl} alt={t.title} className="w-full h-full object-cover" />
+            <img src={t.bannerUrl} alt={t.name} className="w-full h-full object-cover" />
           ) : (
             <span className="text-5xl opacity-30">🔥</span>
           )}
@@ -32,7 +32,7 @@ export function TournamentCard({ t }: { t: Tournament }) {
         </div>
 
         <div className="p-4">
-          <h3 className="font-syne font-bold text-base leading-tight mb-1 line-clamp-1">{t.title}</h3>
+          <h3 className="font-syne font-bold text-base leading-tight mb-1 line-clamp-1">{t.name}</h3>
           <p className="text-[#666] text-xs mb-3">{t.organizerName || 'ClutchHub'}</p>
 
           {/* Progress bar */}
