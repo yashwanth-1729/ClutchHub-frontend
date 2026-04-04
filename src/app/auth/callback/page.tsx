@@ -13,25 +13,21 @@ export default function AuthCallbackPage() {
     const handle = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { router.replace('/auth'); return; }
-
       try {
         const res = await authApi.login(session.access_token);
         setAuth(res.data.data);
-        if (res.data.data.profileComplete) router.replace('/tournaments');
-        else router.replace('/auth/complete-profile');
-      } catch {
-        router.replace('/auth');
-      }
+        router.replace(res.data.data.profileComplete ? '/tournaments' : '/auth/complete-profile');
+      } catch { router.replace('/auth'); }
     };
     handle();
   }, [router, setAuth]);
 
   return (
-    <main className="min-h-screen flex items-center justify-center">
-      <div className="text-center animate-fade-up">
-        <div className="w-12 h-12 border-2 border-[#ff6b2b] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-        <p className="text-[#888]">Signing you in...</p>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', zIndex: 1 }}>
+      <div style={{ textAlign: 'center', animation: 'fadeUp 0.3s ease forwards' }}>
+        <div className="spinner" style={{ margin: '0 auto 1.25rem' }} />
+        <p style={{ color: 'var(--text-2)', fontSize: '0.9rem' }}>Signing you in…</p>
       </div>
-    </main>
+    </div>
   );
 }
