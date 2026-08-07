@@ -2,14 +2,12 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
-import { Plus, Trophy } from 'lucide-react';
-import axios from 'axios';
-
-const API = process.env.NEXT_PUBLIC_API_URL;
+import { getJoined, getMyCreated } from '@/lib/data';
+import { Plus } from 'lucide-react';
 
 const STATUS_COLOR: Record<string, string> = {
-  ONGOING: 'var(--red)', OPEN: 'var(--green)', UPCOMING: 'var(--blue)',
-  COMPLETED: 'var(--text-3)', FULL: 'var(--amber)',
+  LIVE: 'var(--red)', UPCOMING: 'var(--green)',
+  COMPLETED: 'var(--text-3)', CANCELLED: 'var(--text-3)', DRAFT: 'var(--text-3)',
 };
 
 function TCard({ t }: { t: any }) {
@@ -48,26 +46,22 @@ function TCard({ t }: { t: any }) {
 
 export default function MyTeamsPage() {
   const router = useRouter();
-  const { isAuthenticated, accessToken, user } = useAuthStore();
+  const { isAuthenticated, ready } = useAuthStore();
   const [tab,     setTab]     = useState<'joined' | 'created'>('joined');
   const [joined,  setJoined]  = useState<any[]>([]);
   const [created, setCreated] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const canCreate = user?.role === 'ORGANIZER' || user?.role === 'SUPER_ADMIN';
 
   useEffect(() => {
-    if (!isAuthenticated) { router.push('/auth'); return; }
-    const headers = { Authorization: `Bearer ${accessToken}` };
-    Promise.all([
-      axios.get(`${API}/tournaments/joined`, { headers }),
-      axios.get(`${API}/tournaments/mine`,   { headers }),
-    ]).then(([j, c]) => {
-      setJoined(j.data?.data || []);
-      setCreated(c.data?.data?.content || []);
-    }).catch(() => {}).finally(() => setLoading(false));
-  }, [isAuthenticated]);
+    if (ready && !isAuthenticated) { router.push('/auth'); return; }
+    if (!isAuthenticated) return;
+    Promise.all([getJoined(), getMyCreated()])
+      .then(([j, c]) => { setJoined(j as any[]); setCreated(c); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [ready, isAuthenticated, router]);
 
-  if (!isAuthenticated) return null;
+  if (ready && !isAuthenticated) return null;
   const current = tab === 'joined' ? joined : created;
 
   return (
@@ -78,11 +72,9 @@ export default function MyTeamsPage() {
           <h1 className="page-title">My Battles</h1>
           <p className="page-sub">Your tournament history</p>
         </div>
-        {canCreate && (
-          <button className="btn btn-primary btn-sm" onClick={() => router.push('/tournaments/create')}>
-            <Plus size={15} /> Create
-          </button>
-        )}
+        <button className="btn btn-primary btn-sm" onClick={() => router.push('/tournaments/create')}>
+          <Plus size={15} /> Create
+        </button>
       </div>
 
       {/* Stats */}

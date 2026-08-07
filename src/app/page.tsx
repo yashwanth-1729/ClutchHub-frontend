@@ -2,23 +2,21 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
-import { tournamentApi } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
 import { Trophy, Zap, Users, Shield, ArrowRight, ChevronRight } from 'lucide-react';
 
 export default function HomePage() {
   const router = useRouter();
   const { isAuthenticated } = useAuthStore();
-  const [stats, setStats] = useState({ total: 0, live: 0 });
+  const [stats, setStats] = useState({ total: 0, live: 0, players: 0 });
 
   useEffect(() => {
-    tournamentApi.list(0, 1).then(r => {
-      const total = r.data?.data?.totalElements ?? 0;
-      setStats(s => ({ ...s, total }));
-    }).catch(() => {});
-    tournamentApi.list(0, 1, 'ONGOING').then(r => {
-      const live = r.data?.data?.totalElements ?? 0;
-      setStats(s => ({ ...s, live }));
-    }).catch(() => {});
+    supabase.from('tournaments').select('id', { count: 'exact', head: true })
+      .then(({ count }) => setStats(s => ({ ...s, total: count ?? 0 })));
+    supabase.from('tournaments').select('id', { count: 'exact', head: true }).eq('status', 'LIVE')
+      .then(({ count }) => setStats(s => ({ ...s, live: count ?? 0 })));
+    supabase.from('public_profiles').select('id', { count: 'exact', head: true })
+      .then(({ count }) => setStats(s => ({ ...s, players: count ?? 0 })));
   }, []);
 
   const features = [
@@ -39,9 +37,9 @@ export default function HomePage() {
           </span>
         </div>
 
-        <h1 style={{ fontSize: 'clamp(2.4rem, 7vw, 4.5rem)', fontWeight: 700, letterSpacing: '-0.03em', lineHeight: 1.1, color: 'var(--text)', marginBottom: '1.25rem' }}>
+        <h1 style={{ fontSize: 'clamp(2.4rem, 7vw, 4.6rem)', fontWeight: 700, letterSpacing: '-0.035em', lineHeight: 1.05, color: 'var(--text)', marginBottom: '1.25rem' }}>
           Compete.<br />
-          <span style={{ color: 'var(--red)' }}>Win Big.</span><br />
+          <span className="grad-text glow-red">Win Big.</span><br />
           Clutch.
         </h1>
 
@@ -68,7 +66,7 @@ export default function HomePage() {
         {[
           { label: 'Total Tournaments', value: stats.total || '—' },
           { label: 'Live Now',           value: stats.live  || '—' },
-          { label: 'Active Players',     value: '12K+' },
+          { label: 'Active Players',     value: stats.players || '—' },
         ].map((s, i) => (
           <div key={i} className="stat-card" style={{ textAlign: 'center', animation: `fadeUp 0.3s ease ${0.1 + i * 0.08}s both` }}>
             <div className="stat-number">{s.value}</div>

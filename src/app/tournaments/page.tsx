@@ -2,26 +2,22 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
+import { listTournaments } from '@/lib/data';
 import { Plus, Search, Trophy } from 'lucide-react';
-import axios from 'axios';
-
-const API = process.env.NEXT_PUBLIC_API_URL;
 
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
-  OPEN:      { label: 'Open',     cls: 'badge-green' },
-  FULL:      { label: 'Full',     cls: 'badge-amber' },
-  ONGOING:   { label: 'Live',     cls: 'badge-red'   },
-  COMPLETED: { label: 'Ended',    cls: 'badge-gray'  },
-  CANCELLED: { label: 'Cancelled',cls: 'badge-gray'  },
-  DRAFT:     { label: 'Draft',    cls: 'badge-gray'  },
-  UPCOMING:  { label: 'Upcoming', cls: 'badge-blue'  },
+  UPCOMING:  { label: 'Open',      cls: 'badge-green' },
+  LIVE:      { label: 'Live',      cls: 'badge-red'   },
+  COMPLETED: { label: 'Ended',     cls: 'badge-gray'  },
+  CANCELLED: { label: 'Cancelled', cls: 'badge-gray'  },
+  DRAFT:     { label: 'Draft',     cls: 'badge-gray'  },
 };
 
 function TCard({ t }: { t: any }) {
   const router = useRouter();
   const bd = STATUS_BADGE[t.status] ?? { label: t.status, cls: 'badge-gray' };
   const filled = Math.round(((t.registeredTeams ?? 0) / (t.maxTeams ?? 1)) * 100);
-  const isLive = t.status === 'ONGOING';
+  const isLive = t.status === 'LIVE';
 
   return (
     <div className="t-card" onClick={() => router.push(`/tournaments/${t.slug}`)}>
@@ -86,28 +82,23 @@ function TCard({ t }: { t: any }) {
 
 const FILTERS = [
   { key: 'ALL',       label: 'All' },
-  { key: 'OPEN',      label: 'Open' },
-  { key: 'ONGOING',   label: 'Live' },
-  { key: 'UPCOMING',  label: 'Upcoming' },
+  { key: 'UPCOMING',  label: 'Open' },
+  { key: 'LIVE',      label: 'Live' },
   { key: 'COMPLETED', label: 'Ended' },
 ];
 
 export default function TournamentsPage() {
   const router = useRouter();
-  const { isAuthenticated, user } = useAuthStore();
+  const { isAuthenticated } = useAuthStore();
   const [tournaments, setTournaments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('ALL');
   const [search, setSearch] = useState('');
-  const canCreate = user?.role === 'ORGANIZER' || user?.role === 'SUPER_ADMIN';
 
   useEffect(() => {
     setLoading(true);
-    const url = filter === 'ALL'
-      ? `${API}/tournaments?size=60`
-      : `${API}/tournaments?size=60&status=${filter}`;
-    axios.get(url)
-      .then(r => setTournaments(r.data?.data?.content || []))
+    listTournaments(filter)
+      .then(setTournaments)
       .catch(() => setTournaments([]))
       .finally(() => setLoading(false));
   }, [filter]);
@@ -124,7 +115,7 @@ export default function TournamentsPage() {
           <h1 className="page-title">Tournaments</h1>
           <p className="page-sub">{tournaments.length} battles available</p>
         </div>
-        {isAuthenticated && canCreate && (
+        {isAuthenticated && (
           <button className="btn btn-primary btn-sm" onClick={() => router.push('/tournaments/create')}>
             <Plus size={15} /> Create
           </button>

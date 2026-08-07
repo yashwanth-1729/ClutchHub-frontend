@@ -1,7 +1,22 @@
 import type { Metadata, Viewport } from 'next';
+import { Space_Grotesk, Space_Mono } from 'next/font/google';
 import './globals.css';
 import { Providers } from './providers';
 import Nav from '@/components/layout/BottomNav';
+
+const spaceGrotesk = Space_Grotesk({
+  subsets: ['latin'],
+  variable: '--font-grotesk',
+  display: 'swap',
+  weight: ['300', '400', '500', '600', '700'],
+});
+
+const spaceMono = Space_Mono({
+  subsets: ['latin'],
+  variable: '--font-space-mono',
+  display: 'swap',
+  weight: ['400', '700'],
+});
 
 export const metadata: Metadata = {
   title: 'ClutchHub — Free Fire Tournaments',
@@ -18,13 +33,12 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${spaceGrotesk.variable} ${spaceMono.variable}`} suppressHydrationWarning>
       <body>
         {/* Animated background orbs */}
         <div className="bg-orbs" aria-hidden="true">
           <div className="orb orb-1" />
           <div className="orb orb-2" />
-          <div className="orb orb-3" />
         </div>
         <Providers>
           <Nav />

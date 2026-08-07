@@ -2,22 +2,23 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
-import { credentialsApi, pointsApi, orgHostApi } from '@/lib/api';
-import { ArrowLeft, Send, Plus, Minus, Users, Trophy, Shield, Search, Check, Trash2, AlertCircle } from 'lucide-react';
-import axios from 'axios';
-
-const API = process.env.NEXT_PUBLIC_API_URL;
+import {
+  getTournament, getTeamsByTournament, listHosts, pushCredentials,
+  submitSimplePoints, submitDetailedPoints, searchUsers, assignHost, removeHost,
+  generateCertificates,
+} from '@/lib/data';
+import { ArrowLeft, Send, Plus, Minus, Users, Trophy, Shield, Search, Check, Trash2, AlertCircle, Award } from 'lucide-react';
 
 export default function HostPanelPage({ params }: { params: { slug: string } }) {
   const { slug }   = params;
   const router     = useRouter();
-  const { user, isAuthenticated, accessToken } = useAuthStore();
+  const { user, isAuthenticated, ready } = useAuthStore();
 
-  const [tournament,  setTournament]  = useState<any>(null);
-  const [teams,       setTeams]       = useState<any[]>([]);
-  const [hosts,       setHosts]       = useState<any[]>([]);
-  const [loading,     setLoading]     = useState(true);
-  const [activeSection, setSection]  = useState<'creds' | 'points' | 'hosts'>('creds');
+  const [tournament,    setTournament]  = useState<any>(null);
+  const [teams,         setTeams]       = useState<any[]>([]);
+  const [hosts,         setHosts]       = useState<any[]>([]);
+  const [loading,       setLoading]     = useState(true);
+  const [activeSection, setSection]     = useState<'creds' | 'points' | 'hosts' | 'certs'>('creds');
 
   // Credentials
   const [roomId,       setRoomId]       = useState('');
@@ -37,77 +38,87 @@ export default function HostPanelPage({ params }: { params: { slug: string } }) 
   const [hostResults,  setHostResults]  = useState<any[]>([]);
   const [hostMsg,      setHostMsg]      = useState('');
 
-  const isOrganizer = user?.role === 'ORGANIZER' || user?.role === 'SUPER_ADMIN';
+  // Certificates
+  const [topN,        setTopN]        = useState(3);
+  const [certMsg,     setCertMsg]     = useState('');
+  const [certBusy,    setCertBusy]    = useState(false);
+
+  const isOrganizer = !!user && !!tournament && (user.id === tournament.organizerId || user.role === 'SUPER_ADMIN');
+  const allowed = !!user && !!tournament &&
+    (user.id === tournament.organizerId || user.role === 'ORG_HOST' || user.role === 'SUPER_ADMIN');
 
   useEffect(() => {
-    if (!isAuthenticated) { router.push('/auth'); return; }
-    const headers = { Authorization: `Bearer ${accessToken}` };
-    axios.get(`${API}/tournaments/${slug}`, { headers })
-      .then(r => {
-        const t = r.data?.data;
+    if (ready && !isAuthenticated) { router.push('/auth'); return; }
+    if (!isAuthenticated) return;
+    getTournament(slug)
+      .then((t) => {
         setTournament(t);
         if (t?.id) {
-          axios.get(`${API}/teams?tournamentId=${t.id}`, { headers }).then(r2 => setTeams(r2.data?.data || [])).catch(() => {});
-          if (isOrganizer) orgHostApi.list(t.id).then(r2 => setHosts(r2.data?.data || [])).catch(() => {});
+          getTeamsByTournament(t.id).then(setTeams).catch(() => {});
+          const organizer = !!user && (user.id === t.organizerId || user.role === 'SUPER_ADMIN');
+          if (organizer) listHosts(t.id).then((h) => setHosts(h as any[])).catch(() => {});
         }
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [isAuthenticated, slug]);
-
-  // Role check
-  const allowed = user?.role === 'ORGANIZER' || user?.role === 'ORG_HOST' || user?.role === 'SUPER_ADMIN';
+  }, [ready, isAuthenticated, slug, router, user]);
 
   const pushCreds = async () => {
     if (!roomId || !roomPassword || !tournament?.id) return;
     setCredSending(true); setCredMsg('');
     try {
-      await credentialsApi.push(tournament.id, roomId, roomPassword);
+      await pushCredentials(tournament.id, roomId, roomPassword);
       setCredMsg('Credentials broadcast to all players!');
-    } catch { setCredMsg('Failed to push credentials.'); }
+    } catch (e: any) { setCredMsg(e?.message || 'Failed to push credentials.'); }
     finally { setCredSending(false); }
   };
 
   const submitPoints = async (teamId: string, teamName: string) => {
-    const d = pointsData[teamId];
-    if (!d) return;
+    const d = pointsData[teamId] ?? { kills: 0, placement: 1, totalPoints: 0 };
     setSubmittingFor(teamId); setPointsMsg('');
     try {
       if (pointsMode === 'simple') {
-        await pointsApi.submitSimple(tournament.id, teamId, matchNumber, d.totalPoints);
+        await submitSimplePoints(tournament.id, teamId, matchNumber, d.totalPoints);
       } else {
-        await pointsApi.submitDetailed(tournament.id, teamId, matchNumber, d.kills, d.placement);
+        await submitDetailedPoints(tournament.id, teamId, matchNumber, d.kills, d.placement);
       }
       setPointsMsg(`Points saved for ${teamName}`);
-    } catch { setPointsMsg('Failed to save points.'); }
+    } catch (e: any) { setPointsMsg(e?.message || 'Failed to save points.'); }
     finally { setSubmittingFor(null); }
   };
 
   const searchHosts = async (q: string) => {
     setHostSearch(q);
     if (q.trim().length < 2) { setHostResults([]); return; }
-    try {
-      const r = await axios.get(`${API}/users/search?q=${encodeURIComponent(q)}`, { headers: { Authorization: `Bearer ${accessToken}` } });
-      setHostResults(r.data?.data || []);
-    } catch { setHostResults([]); }
+    try { setHostResults(await searchUsers(q)); } catch { setHostResults([]); }
   };
 
-  const assignHost = async (userId: string) => {
+  const doAssignHost = async (userId: string) => {
     if (!tournament?.id) return;
     setHostMsg('');
     try {
-      await orgHostApi.assign(tournament.id, userId);
+      await assignHost(tournament.id, userId);
       setHostMsg('Host assigned successfully.');
-      orgHostApi.list(tournament.id).then(r => setHosts(r.data?.data || [])).catch(() => {});
+      listHosts(tournament.id).then((h) => setHosts(h as any[])).catch(() => {});
       setHostSearch(''); setHostResults([]);
-    } catch { setHostMsg('Failed to assign host.'); }
+    } catch (e: any) { setHostMsg(e?.message || 'Failed to assign host.'); }
   };
 
-  const removeHost = async (id: string) => {
+  const doRemoveHost = async (id: string) => {
     try {
-      await orgHostApi.remove(id);
+      await removeHost(id);
       setHosts(h => h.filter(x => x.id !== id));
-    } catch {}
+    } catch { /* ignore */ }
+  };
+
+  const genCerts = async () => {
+    if (!tournament?.id) return;
+    setCertBusy(true); setCertMsg('');
+    try {
+      const res: any = await generateCertificates(tournament.id, topN);
+      setCertMsg(`Generated ${res?.generated ?? 0} certificate(s).`);
+    } catch (e: any) { setCertMsg(e?.message || 'Failed to generate certificates.'); }
+    finally { setCertBusy(false); }
   };
 
   if (loading) return (
@@ -130,6 +141,7 @@ export default function HostPanelPage({ params }: { params: { slug: string } }) 
   const sections = [
     { key: 'creds',  label: 'Room Creds', icon: Shield },
     { key: 'points', label: 'Points',     icon: Trophy },
+    ...(isOrganizer ? [{ key: 'certs', label: 'Certificates', icon: Award }] : []),
     ...(isOrganizer ? [{ key: 'hosts', label: 'Hosts', icon: Users }] : []),
   ];
 
@@ -204,7 +216,7 @@ export default function HostPanelPage({ params }: { params: { slug: string } }) 
           </div>
 
           {pointsMsg && (
-            <div style={{ padding: '0.625rem 0.875rem', borderRadius: 8, background: 'var(--green-dim)', border: '1px solid rgba(0,232,117,0.25)', fontSize: '0.825rem', color: 'var(--green)', marginBottom: '0.875rem' }}>
+            <div style={{ padding: '0.625rem 0.875rem', borderRadius: 8, background: pointsMsg.includes('Failed') ? 'var(--red-dim)' : 'var(--green-dim)', border: `1px solid ${pointsMsg.includes('Failed') ? 'rgba(251,54,64,0.25)' : 'rgba(0,232,117,0.25)'}`, fontSize: '0.825rem', color: pointsMsg.includes('Failed') ? 'var(--red)' : 'var(--green)', marginBottom: '0.875rem' }}>
               {pointsMsg}
             </div>
           )}
@@ -257,6 +269,28 @@ export default function HostPanelPage({ params }: { params: { slug: string } }) 
         </div>
       )}
 
+      {/* ── Certificates ── */}
+      {activeSection === 'certs' && isOrganizer && (
+        <div className="card" style={{ padding: '1.5rem' }}>
+          <div style={{ marginBottom: '1.25rem' }}>
+            <div style={{ fontWeight: 700, marginBottom: '0.25rem' }}>Generate Certificates</div>
+            <div style={{ fontSize: '0.825rem', color: 'var(--text-2)' }}>Creates a PDF certificate for every player in the top teams. Enter match points first.</div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: '1rem', flexWrap: 'wrap' }}>
+            <div>
+              <label className="input-label">Top N teams</label>
+              <input type="number" className="input" style={{ width: 100 }} min={1} max={25} value={topN} onChange={e => setTopN(Math.max(1, +e.target.value))} />
+            </div>
+            <button className="btn btn-primary" onClick={genCerts} disabled={certBusy}>
+              {certBusy ? 'Generating…' : <><Award size={15} /> Generate</>}
+            </button>
+          </div>
+          {certMsg && (
+            <div style={{ marginTop: '0.875rem', fontSize: '0.825rem', color: certMsg.includes('Failed') ? 'var(--red)' : 'var(--green)' }}>{certMsg}</div>
+          )}
+        </div>
+      )}
+
       {/* ── Manage Hosts ── */}
       {activeSection === 'hosts' && isOrganizer && (
         <div>
@@ -274,7 +308,7 @@ export default function HostPanelPage({ params }: { params: { slug: string } }) 
                       <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{u.displayName || u.username}</div>
                       <div style={{ fontSize: '0.72rem', color: 'var(--text-3)' }}>@{u.username} · {u.role}</div>
                     </div>
-                    <button className="btn btn-primary btn-sm" onClick={() => assignHost(u.id)}>
+                    <button className="btn btn-primary btn-sm" onClick={() => doAssignHost(u.id)}>
                       <Plus size={14} /> Assign
                     </button>
                   </div>
@@ -299,7 +333,7 @@ export default function HostPanelPage({ params }: { params: { slug: string } }) 
                     <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{h.displayName || h.username}</div>
                     <div style={{ fontSize: '0.72rem', color: 'var(--text-3)' }}>@{h.username}</div>
                   </div>
-                  <button className="btn btn-ghost btn-sm" style={{ color: 'var(--red)' }} onClick={() => removeHost(h.id)}>
+                  <button className="btn btn-ghost btn-sm" style={{ color: 'var(--red)' }} onClick={() => doRemoveHost(h.id)}>
                     <Trash2 size={14} />
                   </button>
                 </div>

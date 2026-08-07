@@ -3,17 +3,15 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import { supabase } from '@/lib/supabase';
-import axios from 'axios';
-import { userApi } from '@/lib/api';
-import { Edit2, LogOut, User, Gamepad2, Trophy, Download, Check, X } from 'lucide-react';
+import { getMyProfile, getAchievements, updateProfile } from '@/lib/data';
+import { Edit2, LogOut, Download, Check, X } from 'lucide-react';
 
-const API = process.env.NEXT_PUBLIC_API_URL;
 const GAME_ROLES = ['SNIPER', 'RUSHER', 'NADER', 'ASSAULTER', 'SECONDARY RUSHER', 'SUPPORT'];
 const GENDERS    = ['MALE', 'FEMALE', 'OTHER'];
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { user, isAuthenticated, logout, accessToken } = useAuthStore();
+  const { user, isAuthenticated, ready, logout, setUser } = useAuthStore();
   const [editing,      setEditing]      = useState(false);
   const [saving,       setSaving]       = useState(false);
   const [msg,          setMsg]          = useState('');
@@ -22,24 +20,24 @@ export default function ProfilePage() {
   const [form, setForm] = useState({ username: '', gameUid: '', gender: '', gameRole: '', bio: '' });
 
   useEffect(() => {
-    if (!isAuthenticated) { router.push('/auth'); return; }
-    const headers = { Authorization: `Bearer ${accessToken}` };
-    axios.get(`${API}/profile`, { headers }).then(r => {
-      const p = r.data?.data;
+    if (ready && !isAuthenticated) { router.push('/auth'); return; }
+    if (!isAuthenticated) return;
+    getMyProfile().then((p) => {
       setProfile(p);
       setForm({ username: p?.username || '', gameUid: p?.gameUid || '', gender: p?.gender || '', gameRole: p?.gameRole || '', bio: p?.bio || '' });
     }).catch(() => {});
-    userApi.achievements().then(r => setAchievements(r.data?.data || [])).catch(() => {});
-  }, [isAuthenticated]);
+    getAchievements().then((a) => setAchievements(a as any[])).catch(() => {});
+  }, [ready, isAuthenticated, router]);
 
   const handleSave = async () => {
     setSaving(true); setMsg('');
     try {
-      await axios.put(`${API}/profile`, form, { headers: { Authorization: `Bearer ${accessToken}` } });
+      await updateProfile(form);
       setMsg('Profile saved!');
       setEditing(false);
       setProfile((p: any) => ({ ...p, ...form }));
-    } catch { setMsg('Failed to save.'); }
+      if (form.username) setUser({ username: form.username });
+    } catch (e: any) { setMsg(e?.message || 'Failed to save.'); }
     finally { setSaving(false); }
   };
 
@@ -49,7 +47,7 @@ export default function ProfilePage() {
     router.push('/auth');
   };
 
-  if (!isAuthenticated) return null;
+  if (ready && !isAuthenticated) return null;
   const displayName = profile?.displayName || profile?.username || user?.displayName || 'Player';
   const initials    = displayName.slice(0, 2).toUpperCase();
 
@@ -65,7 +63,7 @@ export default function ProfilePage() {
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
               <h1 style={{ fontSize: '1.25rem', fontWeight: 700, letterSpacing: '-0.01em' }}>{displayName}</h1>
-              <span className="badge badge-gray" style={{ textTransform: 'uppercase', fontSize: '0.65rem' }}>{user?.role || 'PLAYER'}</span>
+              <span className="badge badge-gray" style={{ textTransform: 'uppercase', fontSize: '0.65rem' }}>{profile?.role || user?.role || 'PLAYER'}</span>
             </div>
             {profile?.username && <div style={{ fontSize: '0.825rem', color: 'var(--text-2)', marginTop: '2px' }}>@{profile.username}</div>}
             {profile?.gameUid  && <div style={{ fontSize: '0.8rem', color: 'var(--text-3)', fontFamily: 'var(--font-mono)', marginTop: '4px' }}>UID: {profile.gameUid}</div>}

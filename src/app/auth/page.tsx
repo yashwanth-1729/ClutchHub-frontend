@@ -1,13 +1,12 @@
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthStore } from '@/store/authStore';
 import { supabase } from '@/lib/supabase';
+import { updateProfile, getMyProfile } from '@/lib/data';
 import { Mail, Lock, User, Gamepad2, AlertCircle, ArrowRight, Loader2 } from 'lucide-react';
 
 export default function AuthPage() {
   const router = useRouter();
-  const { setAuth } = useAuthStore();
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -15,20 +14,19 @@ export default function AuthPage() {
   const [gameUid, setGameUid] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+
+  const routeAfterAuth = async () => {
+    const profile = await getMyProfile();
+    router.push(profile?.profileComplete ? '/tournaments' : '/auth/complete-profile');
+  };
 
   const handleLogin = async () => {
-    setLoading(true); setError('');
-    const { data, error: err } = await supabase.auth.signInWithPassword({ email, password });
+    setLoading(true); setError(''); setNotice('');
+    const { error: err } = await supabase.auth.signInWithPassword({ email, password });
     if (err) { setError('Incorrect email or password.'); setLoading(false); return; }
-    try {
-      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + '/auth/login', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ firebaseIdToken: data.session?.access_token }),
-      });
-      const json = await res.json();
-      if (res.ok) { setAuth(json.data); router.push('/tournaments'); }
-      else setError(json.message || 'Login failed');
-    } catch { setError('Could not connect to server'); }
+    try { await routeAfterAuth(); }
+    catch { router.push('/tournaments'); }
     setLoading(false);
   };
 
@@ -36,22 +34,35 @@ export default function AuthPage() {
     if (!username.trim()) { setError('Username is required'); return; }
     if (!gameUid.trim()) { setError('Free Fire UID is required'); return; }
     if (password.length < 6) { setError('Password must be at least 6 characters'); return; }
-    setLoading(true); setError('');
-    const { data, error: err } = await supabase.auth.signUp({ email, password });
+    setLoading(true); setError(''); setNotice('');
+
+    // Pre-check username availability for a clean message (DB uniqueness is the backstop).
+    const { data: taken } = await supabase.from('public_profiles').select('id').eq('username', username.trim()).maybeSingle();
+    if (taken) { setError('Username already taken'); setLoading(false); return; }
+
+    const { data, error: err } = await supabase.auth.signUp({
+      email, password, options: { data: { display_name: username.trim() } },
+    });
     if (err) {
-      if (err.message.includes('already registered')) { setError('Email already registered.'); setMode('login'); }
-      else setError(err.message);
+      if (err.message.toLowerCase().includes('already') || err.message.toLowerCase().includes('registered')) {
+        setError('Email already registered.'); setMode('login');
+      } else setError(err.message);
       setLoading(false); return;
     }
-    try {
-      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + '/auth/register', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ supabaseToken: data.session?.access_token, username, gameUid }),
-      });
-      const json = await res.json();
-      if (res.ok) { setAuth(json.data); router.push('/tournaments'); }
-      else setError(json.message || 'Registration failed');
-    } catch { setError('Could not connect to server'); }
+
+    if (data.session) {
+      // Session available immediately → set the username + UID, then continue.
+      try {
+        await updateProfile({ username: username.trim(), gameUid: gameUid.trim(), displayName: username.trim() });
+        router.push('/tournaments');
+      } catch (e: any) {
+        setError(e?.message || 'Could not finish sign up');
+      }
+    } else {
+      // Email confirmation is enabled on this project.
+      setNotice('Account created! Check your email to confirm, then log in.');
+      setMode('login');
+    }
     setLoading(false);
   };
 
@@ -74,8 +85,8 @@ export default function AuthPage() {
         <div className="card" style={{ padding: '2rem', backdropFilter: 'blur(24px)' }}>
           {/* Tabs */}
           <div className="tab-bar" style={{ marginBottom: '1.75rem' }}>
-            <button className={`tab${mode === 'login' ? ' active' : ''}`} onClick={() => { setMode('login'); setError(''); }}>Log In</button>
-            <button className={`tab${mode === 'signup' ? ' active' : ''}`} onClick={() => { setMode('signup'); setError(''); }}>Sign Up</button>
+            <button className={`tab${mode === 'login' ? ' active' : ''}`} onClick={() => { setMode('login'); setError(''); setNotice(''); }}>Log In</button>
+            <button className={`tab${mode === 'signup' ? ' active' : ''}`} onClick={() => { setMode('signup'); setError(''); setNotice(''); }}>Sign Up</button>
           </div>
 
           {/* Fields */}
@@ -118,10 +129,15 @@ export default function AuthPage() {
             )}
           </div>
 
-          {/* Error */}
+          {/* Error / notice */}
           {error && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '1rem', padding: '0.7rem 0.875rem', background: 'var(--red-dim)', border: '1px solid rgba(251,54,64,0.25)', borderRadius: 'var(--radius-sm)', fontSize: '0.825rem', color: 'var(--red)' }}>
               <AlertCircle size={15} style={{ flexShrink: 0 }} /> {error}
+            </div>
+          )}
+          {notice && (
+            <div style={{ marginTop: '1rem', padding: '0.7rem 0.875rem', background: 'var(--green-dim)', border: '1px solid rgba(0,232,117,0.25)', borderRadius: 'var(--radius-sm)', fontSize: '0.825rem', color: 'var(--green)' }}>
+              {notice}
             </div>
           )}
 
@@ -136,8 +152,8 @@ export default function AuthPage() {
           {/* Toggle */}
           <p style={{ textAlign: 'center', marginTop: '1.25rem', fontSize: '0.85rem', color: 'var(--text-2)' }}>
             {mode === 'login'
-              ? <>New here? <span onClick={() => { setMode('signup'); setError(''); }} style={{ color: 'var(--red)', cursor: 'pointer', fontWeight: 600 }}>Create an account</span></>
-              : <>Already have one? <span onClick={() => { setMode('login'); setError(''); }} style={{ color: 'var(--red)', cursor: 'pointer', fontWeight: 600 }}>Sign in</span></>
+              ? <>New here? <span onClick={() => { setMode('signup'); setError(''); setNotice(''); }} style={{ color: 'var(--red)', cursor: 'pointer', fontWeight: 600 }}>Create an account</span></>
+              : <>Already have one? <span onClick={() => { setMode('login'); setError(''); setNotice(''); }} style={{ color: 'var(--red)', cursor: 'pointer', fontWeight: 600 }}>Sign in</span></>
             }
           </p>
         </div>

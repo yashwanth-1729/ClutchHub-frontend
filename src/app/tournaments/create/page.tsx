@@ -2,15 +2,14 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
+import { createTournament } from '@/lib/data';
 import { ArrowLeft, ArrowRight, Check, AlertCircle } from 'lucide-react';
-
-const API = process.env.NEXT_PUBLIC_API_URL;
 
 const STEPS = ['Details', 'Settings', 'Review'];
 
 export default function CreateTournamentPage() {
   const router = useRouter();
-  const { isAuthenticated, accessToken, user } = useAuthStore();
+  const { isAuthenticated, ready, setUser } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState('');
   const [step,    setStep]    = useState(1);
@@ -21,11 +20,9 @@ export default function CreateTournamentPage() {
     prizePool: 0, scheduledAt: '', rules: '',
   });
 
-  const canCreate = user?.role === 'ORGANIZER' || user?.role === 'SUPER_ADMIN';
-
   useEffect(() => {
-    if (!isAuthenticated) { router.push('/auth'); return; }
-  }, [isAuthenticated]);
+    if (ready && !isAuthenticated) router.push('/auth');
+  }, [ready, isAuthenticated, router]);
 
   const up = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }));
 
@@ -34,35 +31,19 @@ export default function CreateTournamentPage() {
     if (!form.scheduledAt)  { setError('Schedule date is required'); return; }
     setLoading(true); setError('');
     try {
-      const res = await fetch(`${API}/tournaments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({
-          name: form.title, description: form.description, game: form.game,
-          format: form.format, maxTeams: Number(form.maxTeams),
-          entryFee: Number(form.entryFee), prizePool: Number(form.prizePool),
-          scheduledAt: new Date(form.scheduledAt).toISOString(), rules: form.rules,
-        }),
+      const t = await createTournament({
+        name: form.title, description: form.description, rules: form.rules,
+        game: form.game, format: form.format,
+        maxTeams: Number(form.maxTeams), entryFee: Number(form.entryFee), prizePool: Number(form.prizePool),
+        scheduledAt: new Date(form.scheduledAt).toISOString(),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Failed to create');
-      router.push(`/tournaments/${data.data.slug}`);
-    } catch (e: any) { setError(e.message); }
+      setUser({ role: 'ORGANIZER' });
+      router.push(`/tournaments/${t.slug}`);
+    } catch (e: any) { setError(e.message || 'Failed to create'); }
     finally { setLoading(false); }
   };
 
   if (!isAuthenticated) return null;
-
-  if (!canCreate) return (
-    <div className="page-wrapper">
-      <div className="empty-state">
-        <AlertCircle size={40} color="var(--red)" style={{ opacity: 0.7, marginBottom: '0.75rem' }} />
-        <div className="empty-title">Access Denied</div>
-        <div className="empty-sub">Only Organizers can create tournaments.</div>
-        <button className="btn btn-ghost btn-sm" style={{ marginTop: '1rem' }} onClick={() => router.push('/tournaments')}>Back to Arena</button>
-      </div>
-    </div>
-  );
 
   const inputRow = (label: string, node: React.ReactNode) => (
     <div key={label}>

@@ -1,11 +1,11 @@
-export type UserRole = 'PLAYER' | 'ORGANIZER' | 'ORG_HOST' | 'ADMIN' | 'SUPER_ADMIN';
-export type TournamentStatus = 'DRAFT' | 'OPEN' | 'FULL' | 'ONGOING' | 'COMPLETED' | 'CANCELLED';
+export type UserRole = 'PLAYER' | 'ORGANIZER' | 'ORG_HOST' | 'SUPER_ADMIN';
+export type TournamentStatus = 'DRAFT' | 'UPCOMING' | 'LIVE' | 'COMPLETED' | 'CANCELLED';
 export type TeamFormat = 'SOLO' | 'DUO' | 'SQUAD';
-export type PaymentStatus = 'PENDING' | 'SUCCESS' | 'FAILED';
+export type GameType = 'FREE_FIRE' | 'BGMI' | 'VALORANT' | 'COD_MOBILE' | 'OTHER';
 
 export interface User {
   id: string;
-  email: string;
+  email?: string;
   username?: string;
   displayName?: string;
   avatarUrl?: string;
@@ -14,34 +14,25 @@ export interface User {
   profileComplete: boolean;
 }
 
-export interface AuthResponse {
-  accessToken: string;
-  refreshToken: string;
-  userId: string;
-  role: UserRole;
-  displayName?: string;
-  avatarUrl?: string;
-  profileComplete: boolean;
-}
-
 export interface Tournament {
   id: string;
+  organizerId?: string;
   name: string;
   slug: string;
   description?: string;
+  rules?: string;
   game: string;
   format: TeamFormat;
+  status: TournamentStatus;
   maxTeams: number;
   registeredTeams: number;
   entryFee: number;
   prizePool: number;
-  scheduledAt: string;
-  status: TournamentStatus;
   bannerUrl?: string;
+  scheduledAt: string;
+  createdAt?: string;
   organizerName?: string;
-  rules?: string;
-  roomId?: string;
-  roomPassword?: string;
+  organizerUsername?: string;
 }
 
 export interface Team {
@@ -49,14 +40,7 @@ export interface Team {
   name: string;
   logoUrl?: string;
   status: string;
-  players: TeamPlayer[];
-}
-
-export interface TeamPlayer {
-  id: string;
-  gameUid: string;
-  inGameName: string;
-  isLeader: boolean;
+  playerCount?: number;
 }
 
 export interface LeaderboardEntry {
@@ -69,19 +53,4 @@ export interface LeaderboardEntry {
   totalPoints: number;
   matchesPlayed: number;
   rank: number;
-}
-
-export interface ApiResponse<T> {
-  success: boolean;
-  data: T;
-  message?: string;
-  timestamp: string;
-}
-
-export interface PageResponse<T> {
-  content: T[];
-  totalElements: number;
-  totalPages: number;
-  number: number;
-  size: number;
 }

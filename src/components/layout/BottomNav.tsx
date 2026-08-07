@@ -1,12 +1,13 @@
 'use client';
-import { usePathname, useRouter } from 'next/navigation';
-import { Home, Trophy, Users, MessageCircle, User } from 'lucide-react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { Home, Trophy, Users, MessageSquare, User } from 'lucide-react';
 
 const NAV = [
   { path: '/',           icon: Home,          label: 'Home' },
-  { path: '/tournaments',icon: Trophy,         label: 'Arena' },
-  { path: '/my-teams',   icon: Users,          label: 'Squad' },
-  { path: '/search',     icon: MessageCircle,  label: 'Comms' },
+  { path: '/tournaments',icon: Trophy,        label: 'Arena' },
+  { path: '/my-teams',   icon: Users,         label: 'Squad' },
+  { path: '/search',     icon: MessageSquare,  label: 'Messages' },
   { path: '/profile',    icon: User,           label: 'Profile' },
 ];
 
@@ -16,7 +17,6 @@ function active(pathname: string, path: string) {
 
 export default function Nav() {
   const pathname = usePathname();
-  const router = useRouter();
   if (pathname?.startsWith('/auth')) return null;
 
   return (
@@ -29,14 +29,15 @@ export default function Nav() {
         </div>
         <nav className="sidebar-nav">
           {NAV.map(({ path, icon: Icon, label }) => (
-            <button
+            <Link
               key={path}
+              href={path}
+              prefetch={true}
               className={`sidebar-item${active(pathname, path) ? ' active' : ''}`}
-              onClick={() => router.push(path)}
             >
               <Icon size={18} className="sidebar-item-icon" />
               {label}
-            </button>
+            </Link>
           ))}
         </nav>
         <div className="sidebar-footer">
@@ -51,14 +52,15 @@ export default function Nav() {
         {NAV.map(({ path, icon: Icon, label }) => {
           const isActive = active(pathname, path);
           return (
-            <button
+            <Link
               key={path}
+              href={path}
+              prefetch={true}
               className={`nav-item${isActive ? ' active' : ''}`}
-              onClick={() => router.push(path)}
             >
               <Icon size={20} strokeWidth={isActive ? 2.5 : 1.8} />
               <span className="nav-item-label">{label}</span>
-            </button>
+            </Link>
           );
         })}
       </nav>

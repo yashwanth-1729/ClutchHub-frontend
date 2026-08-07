@@ -1,38 +1,40 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
-import { Client } from '@stomp/stompjs';
-import SockJS from 'sockjs-client';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { supabase } from '@/lib/supabase';
+import { getLeaderboard } from '@/lib/data';
 import { LeaderboardEntry } from '@/types';
 
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://66.85.185.109:8080/ws';
-
-export function useLeaderboard(tournamentId: string) {
+/**
+ * Live leaderboard via Supabase Realtime. Fetches the current standings, then
+ * refetches whenever a `points` row for this tournament changes.
+ */
+export function useLeaderboard(tournamentId?: string) {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [connected, setConnected] = useState(false);
-  const clientRef = useRef<Client | null>(null);
+  const idRef = useRef(tournamentId);
+  idRef.current = tournamentId;
+
+  const refetch = useCallback(async () => {
+    const id = idRef.current;
+    if (!id) return;
+    try { setLeaderboard(await getLeaderboard(id)); } catch { /* ignore */ }
+  }, []);
 
   useEffect(() => {
     if (!tournamentId) return;
+    refetch();
 
-    const client = new Client({
-      webSocketFactory: () => new SockJS(`${WS_URL}/ws-clutchhub`),
-      onConnect: () => {
-        setConnected(true);
-        client.subscribe(`/topic/leaderboard/${tournamentId}`, (msg) => {
-          try {
-            setLeaderboard(JSON.parse(msg.body));
-          } catch {}
-        });
-      },
-      onDisconnect: () => setConnected(false),
-      reconnectDelay: 3000,
-    });
+    const channel = supabase
+      .channel(`lb:${tournamentId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'points', filter: `tournament_id=eq.${tournamentId}` },
+        () => refetch()
+      )
+      .subscribe((status) => setConnected(status === 'SUBSCRIBED'));
 
-    client.activate();
-    clientRef.current = client;
+    return () => { supabase.removeChannel(channel); };
+  }, [tournamentId, refetch]);
 
-    return () => { client.deactivate(); };
-  }, [tournamentId]);
-
-  return { leaderboard, connected };
+  return { leaderboard, connected, refetch };
 }

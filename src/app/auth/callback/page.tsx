@@ -2,25 +2,22 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { authApi } from '@/lib/api';
-import { useAuthStore } from '@/store/authStore';
+import { getMyProfile } from '@/lib/data';
 
 export default function AuthCallbackPage() {
   const router = useRouter();
-  const { setAuth } = useAuthStore();
 
   useEffect(() => {
     const handle = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { router.replace('/auth'); return; }
       try {
-        const res = await authApi.login(session.access_token);
-        setAuth(res.data.data);
-        router.replace(res.data.data.profileComplete ? '/tournaments' : '/auth/complete-profile');
-      } catch { router.replace('/auth'); }
+        const profile = await getMyProfile();
+        router.replace(profile?.profileComplete ? '/tournaments' : '/auth/complete-profile');
+      } catch { router.replace('/tournaments'); }
     };
     handle();
-  }, [router, setAuth]);
+  }, [router]);
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', zIndex: 1 }}>

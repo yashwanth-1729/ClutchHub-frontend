@@ -1,76 +1,41 @@
 'use client';
-import { useQuery } from '@tanstack/react-query';
-import { tournamentApi } from '@/lib/api';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { getTournament, registerTeam } from '@/lib/data';
 import { useAuthStore } from '@/store/authStore';
-import { Tournament, ApiResponse, LeaderboardEntry } from '@/types';
-import { useState, useEffect, useRef } from 'react';
+import { useLeaderboard } from '@/hooks/useLeaderboard';
+import { useRoomCredentials } from '@/hooks/useRoomCredentials';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Client } from '@stomp/stompjs';
-import SockJS from 'sockjs-client';
 import { ArrowLeft, Trophy, Calendar, Users, Zap, Shield, Copy, Settings } from 'lucide-react';
-import axios from 'axios';
-
-const WS_URL  = process.env.NEXT_PUBLIC_WS_URL  || 'ws://66.85.185.109:8080/ws';
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://66.85.185.109:8080/api';
 
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
-  OPEN:      { label: 'Open',     cls: 'badge-green' },
-  FULL:      { label: 'Full',     cls: 'badge-amber' },
-  ONGOING:   { label: 'Live',     cls: 'badge-red'   },
-  COMPLETED: { label: 'Ended',    cls: 'badge-gray'  },
-  CANCELLED: { label: 'Cancelled',cls: 'badge-gray'  },
-  DRAFT:     { label: 'Draft',    cls: 'badge-gray'  },
-  UPCOMING:  { label: 'Upcoming', cls: 'badge-blue'  },
+  UPCOMING:  { label: 'Open',      cls: 'badge-green' },
+  LIVE:      { label: 'Live',      cls: 'badge-red'   },
+  COMPLETED: { label: 'Ended',     cls: 'badge-gray'  },
+  CANCELLED: { label: 'Cancelled', cls: 'badge-gray'  },
+  DRAFT:     { label: 'Draft',     cls: 'badge-gray'  },
 };
 
 export default function TournamentDetailPage({ params }: { params: { slug: string } }) {
   const { slug } = params;
   const router = useRouter();
-  const { user, isAuthenticated, accessToken } = useAuthStore();
+  const queryClient = useQueryClient();
+  const { user, isAuthenticated } = useAuthStore();
 
-  const [tab,              setTab]              = useState<'info' | 'leaderboard' | 'rules'>('info');
-  const [joining,          setJoining]          = useState(false);
-  const [joinMsg,          setJoinMsg]          = useState('');
-  const [showJoinModal,    setShowJoinModal]    = useState(false);
-  const [teamName,         setTeamName]         = useState('');
-  const [roomCredentials,  setRoomCredentials]  = useState<{ roomId: string; roomPassword: string } | null>(null);
-  const credStompRef = useRef<Client | null>(null);
+  const [tab,           setTab]           = useState<'info' | 'leaderboard' | 'rules'>('info');
+  const [joining,       setJoining]       = useState(false);
+  const [joinMsg,       setJoinMsg]       = useState('');
+  const [showJoinModal, setShowJoinModal] = useState(false);
+  const [teamName,      setTeamName]      = useState('');
 
   /* ── Fetch tournament ── */
-  const { data, isLoading } = useQuery({
+  const { data: tournament, isLoading } = useQuery({
     queryKey: ['tournament', slug],
-    queryFn: async () => (await tournamentApi.get(slug)).data as ApiResponse<Tournament>,
+    queryFn: () => getTournament(slug),
   });
 
-  const { data: lbData } = useQuery({
-    queryKey: ['leaderboard', data?.data?.id],
-    queryFn: async () => (await tournamentApi.leaderboard(data!.data!.id)).data as ApiResponse<LeaderboardEntry[]>,
-    enabled: !!data?.data?.id,
-    refetchInterval: 10000,
-  });
-
-  const tournament = data?.data;
-  const entries    = lbData?.data ?? [];
-
-  /* ── Room credentials WS ── */
-  useEffect(() => {
-    if (!tournament?.id) return;
-    if (tournament.roomId && tournament.roomPassword) {
-      setRoomCredentials({ roomId: tournament.roomId as string, roomPassword: tournament.roomPassword as string });
-    }
-    const client = new Client({
-      webSocketFactory: () => new SockJS(`${WS_URL}/ws-clutchhub`),
-      onConnect: () => {
-        client.subscribe(`/topic/tournament/${tournament.id}/credentials`, msg => {
-          try { setRoomCredentials(JSON.parse(msg.body)); } catch {}
-        });
-      },
-      reconnectDelay: 3000,
-    });
-    client.activate();
-    credStompRef.current = client;
-    return () => { client.deactivate(); };
-  }, [tournament?.id]);
+  const { leaderboard: entries } = useLeaderboard(tournament?.id);
+  const roomCredentials = useRoomCredentials(tournament?.id);
 
   /* ── Join ── */
   const openJoin = () => {
@@ -80,20 +45,23 @@ export default function TournamentDetailPage({ params }: { params: { slug: strin
   };
 
   const handleJoin = async (name: string) => {
+    if (!tournament) return;
     setJoining(true); setJoinMsg('');
     try {
-      await axios.post(`${API_URL}/teams`, { tournamentId: tournament!.id, name: name.trim() || user?.displayName }, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
+      await registerTeam(tournament.id, name.trim() || user?.displayName || '');
       setJoinMsg('Registered successfully!');
       setShowJoinModal(false);
+      queryClient.invalidateQueries({ queryKey: ['tournament', slug] });
     } catch (e: any) {
-      setJoinMsg(e.response?.data?.message || 'Registration failed.');
+      setJoinMsg(e?.message || 'Registration failed.');
     } finally { setJoining(false); }
   };
 
-  const isHost = user?.role === 'ORGANIZER' || user?.role === 'ORG_HOST' || user?.role === 'SUPER_ADMIN';
-  const canJoin = tournament?.status === 'OPEN' && isAuthenticated;
+  const isManager = !!user && !!tournament &&
+    (user.id === tournament.organizerId || user.role === 'ORG_HOST' || user.role === 'SUPER_ADMIN');
+  const canJoin = tournament?.status === 'UPCOMING'
+    && (tournament.registeredTeams ?? 0) < (tournament.maxTeams ?? 0)
+    && isAuthenticated;
 
   if (isLoading) return (
     <div className="page-wrapper" style={{ display: 'flex', justifyContent: 'center', padding: '4rem' }}>
@@ -139,7 +107,7 @@ export default function TournamentDetailPage({ params }: { params: { slug: strin
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
                 <span className={`badge ${bd.cls}`}>
-                  {tournament.status === 'ONGOING' && <span className="live-dot" style={{ width: 5, height: 5 }} />}
+                  {tournament.status === 'LIVE' && <span className="live-dot" style={{ width: 5, height: 5 }} />}
                   {bd.label}
                 </span>
                 <span className="badge badge-gray">{tournament.format}</span>
@@ -148,7 +116,7 @@ export default function TournamentDetailPage({ params }: { params: { slug: strin
               <p style={{ fontSize: '0.825rem', color: 'var(--text-2)' }}>by {tournament.organizerName || 'ClutchHub'}</p>
             </div>
             <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
-              {isHost && (
+              {isManager && (
                 <button className="btn btn-ghost btn-sm" onClick={() => router.push(`/tournaments/${slug}/host`)}>
                   <Settings size={15} /> Host Panel
                 </button>
@@ -195,7 +163,7 @@ export default function TournamentDetailPage({ params }: { params: { slug: strin
           <span style={{ fontWeight: 600 }}>{tournament.registeredTeams ?? 0} / {tournament.maxTeams} ({filled}%)</span>
         </div>
         <div className="progress-bar">
-          <div className={`progress-fill ${filled >= 100 ? '' : ''}`} style={{ width: `${filled}%`, background: filled >= 100 ? 'linear-gradient(90deg,var(--amber),#FFD080)' : undefined }} />
+          <div className="progress-fill" style={{ width: `${filled}%`, background: filled >= 100 ? 'linear-gradient(90deg,var(--amber),#FFD080)' : undefined }} />
         </div>
       </div>
 

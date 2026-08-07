@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { authApi } from '@/lib/api';
+import { updateProfile } from '@/lib/data';
 import { useAuthStore } from '@/store/authStore';
 import { User, Gamepad2, AlertCircle, Check, Loader2 } from 'lucide-react';
 
@@ -18,8 +18,9 @@ export default function CompleteProfilePage() {
     if (!form.gameUid.trim()) { setError('Free Fire UID is required'); return; }
     setLoading(true); setError('');
     try {
-      await authApi.completeProfile(form);
-      setUser({ username: form.username, displayName: form.displayName, profileComplete: true });
+      const displayName = form.displayName.trim() || form.username.trim();
+      await updateProfile({ username: form.username.trim(), gameUid: form.gameUid.trim(), displayName });
+      setUser({ username: form.username.trim(), displayName, profileComplete: true });
       router.replace('/tournaments');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to save profile');
